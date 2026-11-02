@@ -55,11 +55,11 @@ const COLS = {
   balance: col('Total Balance', F.BALANCE, true), balanceAdj: col('Total Balance + Margin', F.TBADJ, true), cicilan: col('Cicilan', F.CICILAN, true),
   sukarela: col('Simp. Sukarela', F.SUKARELA, true), wajib: col('Simp. Wajib', F.SIMP, true),
   kum: col('Kum. Simpanan', F.KUM, true), total: col('Total Simpanan', F.TOTAL, true),
-  angsuran: { label: 'Jumlah Angsuran', get: (r, k) => r[F.CICILAN] > 0 ? Math.floor((r[F.SUKARELA] + wajibOf(r, k)) / r[F.CICILAN]) : 0, num: true },
+  angsuran: { label: 'Jumlah Angsuran', get: (r, k) => r[F.CICILAN] > 0 ? Math.floor((r[F.SUKARELA] + wajibOf(r, k)) / r[F.CICILAN]) : 0, num: true, noSum: true },
   sisa: { label: 'Sisa Pelunasan', get: (r, k) => r[F.TBADJ] - r[F.KUM] - wajibOf(r, k), num: true },
   sisaTm: { label: 'Total Balance - Simpanan', get: (r, k) => r[F.BALANCE] - r[F.KUM] - wajibOf(r, k), num: true },
   note: { label: 'Catatan', get: (r, k) => noteText(r[F.NOTE], k), num: false },
-  ya: { label: 'Keterangan', get: () => 'YA' },    // hanya di file Excel (tetap seperti versi lama)
+  ya: { label: 'Keterangan', get: () => 'YA', mid: true },    // hanya di file Excel (tetap seperti versi lama)
 };
 const BASE = ['branch', 'client', 'loan', 'name', 'product', 'staf', 'balance'];
 
@@ -938,32 +938,199 @@ async function sendUpload() {
 
 /* ---------------------------------------------------------------------
    11. Unduh Excel
+   Susunan tiap sheet: judul -> keterangan (isi kategori, rumus, asal data) -> judul kolom berwarna (bisa disaring, tetap terlihat
+   saat digulir) -> data -> baris TOTAL. Sheet "Petunjuk" menjelaskan istilah dan arti tiap kolom.
+   Warna ditulis 6 digit (RRGGBB) sesuai dokumentasi xlsx-js-style; palet sama dengan style.css.
    --------------------------------------------------------------------- */
-// Satu lembar dari daftar kolom + baris. Angka diberi format ribuan & ada filter di judul.
-function sheetOf(cols, rows, k) {
-  const ws = XLSX.utils.aoa_to_sheet([cols.map(c => c.label)].concat(rows.map(r => cols.map(c => c.get(r, k)))));
-  ws['!cols'] = cols.map(c => ({ wch: Math.max(12, c.label.length + 2) }));
-  // Warnai sel Client ID yang berulang dengan merah pada file Excel hasil ekspor.
-  const clientCol = cols.findIndex(c => c.label === 'Client ID');
-  if (clientCol >= 0) {
-    for (let i = 0; i < rows.length; i++) {
-      const id = clientIdKey(rows[i][F.CLIENT]);
-      const count = id ? (state.clientIdCounts.get(id) || 0) : 0;
-      if (count > 1) {
-        const addr = XLSX.utils.encode_cell({ r: i + 1, c: clientCol });
-        const cell = ws[addr];
-        if (cell) cell.s = {
-          fill: { patternType: 'solid', fgColor: { rgb: 'FFFFD6D6' } },
-          font: { bold: true, color: { rgb: 'FFB42318' } },
-        };
-      }
-    }
-  }
-  cols.forEach((c, j) => {
-    if (!c.num) return;
-    for (let i = 1; i <= rows.length; i++) { const cell = ws[XLSX.utils.encode_cell({ r: i, c: j })]; if (cell) cell.z = '#,##0'; }
+const XL_NUM = '#,##0;[Red]-#,##0;0';      // pemisah ribuan mengikuti bahasa Excel pengguna; angka minus merah
+const XL_DARK = '064E3B', XL_SOFT = 'E3F5ED', XL_LINE = 'B9CFC5', XL_INK = '10261F', XL_MUTE = '55695F';
+const xlSide = (style, rgb) => ({ style, color: { rgb } });
+const xlBox = rgb => ({ top: xlSide('thin', rgb), bottom: xlSide('thin', rgb), left: xlSide('thin', rgb), right: xlSide('thin', rgb) });
+const xlFill = rgb => ({ patternType: 'solid', fgColor: { rgb } });
+const XS = {
+  title: { font: { sz: 16, bold: true, color: { rgb: XL_DARK } }, alignment: { vertical: 'center' } },
+  info: { font: { sz: 10, color: { rgb: XL_MUTE } }, alignment: { vertical: 'center' } },
+  rule: { font: { sz: 10, bold: true, color: { rgb: XL_INK } }, alignment: { vertical: 'center' } },
+  head: { font: { sz: 10, bold: true, color: { rgb: 'FFFFFF' } }, fill: xlFill(XL_DARK), border: xlBox('FFFFFF'),
+    alignment: { horizontal: 'center', vertical: 'center', wrapText: true } },
+  text: { font: { sz: 10 }, alignment: { vertical: 'center' }, border: xlBox(XL_LINE) },
+  wrap: { font: { sz: 10 }, alignment: { vertical: 'top', wrapText: true }, border: xlBox(XL_LINE) },
+  mid: { font: { sz: 10 }, alignment: { horizontal: 'center', vertical: 'center' }, border: xlBox(XL_LINE) },
+  num: { font: { sz: 10 }, alignment: { horizontal: 'right', vertical: 'center' }, border: xlBox(XL_LINE), numFmt: XL_NUM },
+  dup: { font: { sz: 10, bold: true, color: { rgb: 'B42318' } }, fill: xlFill('FFD6D6'), alignment: { vertical: 'center' }, border: xlBox(XL_LINE) },
+  totT: { font: { sz: 10, bold: true, color: { rgb: XL_DARK } }, fill: xlFill(XL_SOFT), alignment: { vertical: 'center' },
+    border: { top: xlSide('medium', XL_DARK), bottom: xlSide('thin', XL_LINE), left: xlSide('thin', XL_LINE), right: xlSide('thin', XL_LINE) } },
+  totN: { font: { sz: 10, bold: true, color: { rgb: XL_DARK } }, fill: xlFill(XL_SOFT), alignment: { horizontal: 'right', vertical: 'center' }, numFmt: XL_NUM,
+    border: { top: xlSide('medium', XL_DARK), bottom: xlSide('thin', XL_LINE), left: xlSide('thin', XL_LINE), right: xlSide('thin', XL_LINE) } },
+  sec: { font: { sz: 10, bold: true, color: { rgb: 'FFFFFF' } }, fill: xlFill(XL_DARK), alignment: { vertical: 'center' }, border: xlBox(XL_DARK) },
+  key: { font: { sz: 10, bold: true, color: { rgb: XL_INK } }, alignment: { vertical: 'top', wrapText: true }, border: xlBox(XL_LINE) },
+};
+
+const stampNow = () => { const t = new Date(); return today() + ' ' + pad(t.getHours()) + ':' + pad(t.getMinutes()); };
+// Jumlah karakter angka setelah diberi pemisah ribuan (untuk lebar kolom).
+const xlDigits = v => { const a = Math.abs(Math.trunc(v)), n = a < 10 ? 1 : Math.floor(Math.log10(a)) + 1; return n + Math.floor((n - 1) / 3) + (v < 0 ? 1 : 0); };
+
+// Rumus tiap kategori, sesuai kolom yang benar-benar ada di sheet (bergantung pada pilihan "Include: Simpanan Wajib").
+function xlRule(c) {
+  const w = inc(c.k);
+  if (c.k === 'a') return 'Rumus: Jumlah Angsuran = (' + (w ? 'Simp. Sukarela + Simp. Wajib' : 'Simp. Sukarela') + ') ÷ Cicilan, dibulatkan ke bawah.';
+  if (c.k === 't') return 'Rumus: Total Balance - Simpanan = Total Balance - ' + (w ? 'Total Simpanan' : 'Kum. Simpanan') + ' (tanpa Penyesuaian Margin).';
+  return 'Rumus: Sisa Pelunasan = Total Balance + Margin - Kum. Simpanan' + (w ? ' - Simp. Wajib' : '') + '.';
+}
+
+// Keterangan umum di bagian atas sheet. rows = daftar pinjaman pada sheet itu (kosongkan untuk sheet ringkasan).
+function xlSource(rows) {
+  const d = state.data, u = state.user || {};
+  const origin = (d.updated ? 'Data per ' + fmtStamp(d.updated) + (d.file ? ' · Sumber: ' + d.file : '') + ' · ' : '') + 'Penyesuaian Margin ' + nf1.format(d.margin || 0) + '%';
+  const by = 'Diunduh ' + fmtStamp(stampNow()) + ' oleh ' + (u.nama || u.nik || '-')
+    + (rows ? ' · ' + fmt(rows.length) + ' pinjaman di ' + fmt(new Set(rows.map(r => r[F.BRANCH])).size) + ' cabang' : '')
+    + ' · Penjelasan kolom ada di sheet "Petunjuk"';
+  return [origin, by];
+}
+
+// Keterangan filter & urutan untuk "Unduh daftar ini", supaya jelas mengapa jumlah barisnya berbeda dari kategori penuh.
+function xlFilterNote() {
+  const f = [], s = state.sort, sc = s.label && screenCols(catOf(state.cat)).find(x => x.label === s.label);
+  if (state.branch) f.push('Cabang ' + state.branch);
+  if (state.staf) f.push('Staf ' + state.staf);
+  if (state.q.trim()) f.push('Kata kunci "' + state.q.trim() + '"');
+  const order = sc ? 'Urutan: ' + sc.label + (sc.num ? (s.dir > 0 ? ' (terkecil dulu)' : ' (terbesar dulu)') : (s.dir > 0 ? ' (A-Z)' : ' (Z-A)')) : '';
+  if (!f.length) return order || 'Tanpa filter: seluruh pinjaman di kategori ini.';
+  return 'Daftar sudah disaring: ' + f.join(' · ') + (order ? ' · ' + order : '');
+}
+
+// Satu sheet dari daftar kolom + baris. meta = { title, lines: [teks | [teks, gaya]], total: tampilkan baris TOTAL }.
+// Angka diberi pemisah ribuan; baris TOTAL memakai SUBTOTAL sehingga ikut berubah saat data disaring di Excel.
+function sheetOf(cols, rows, k, meta) {
+  const lines = (meta.lines || []).filter(Boolean).map(l => typeof l === 'string' ? [l, 'info'] : l);
+  const nc = cols.length, n = rows.length;
+  // Sel Client ID yang berulang diberi warna merah (sama seperti tanda DUPLIKAT di layar).
+  const dupCol = cols.findIndex(c => c.label === 'Client ID');
+  const isDup = r => { const id = clientIdKey(r[F.CLIENT]); return !!id && (state.clientIdCounts.get(id) || 0) > 1; };
+  const dupN = dupCol < 0 ? 0 : rows.reduce((a, r) => a + (isDup(r) ? 1 : 0), 0);
+  if (dupN) lines.push(['Client ID berlatar merah = duplikat (muncul lebih dari sekali di data Anda): ' + fmt(dupN) + ' baris.', 'info']);
+
+  const hr = lines.length + 1;                  // indeks baris judul kolom (0 = baris pertama sheet)
+  const last = hr + n;                          // indeks baris data terakhir
+  const L = cols.map((c, j) => XLSX.utils.encode_col(j));
+  // Lebar awal dari judul kolom: boleh turun ke 2 baris, tetapi kata terpanjangnya harus muat.
+  const width = cols.map(c => Math.max(9, Math.min(60, Math.max(Math.ceil(c.label.length / 2), ...c.label.split(' ').map(w => w.length)) + 2)));
+  const sums = cols.map(() => 0);
+
+  const aoa = [[meta.title]].concat(lines.map(l => [l[0]]), [cols.map(c => c.label)]);
+  rows.forEach(r => {
+    aoa.push(cols.map((c, j) => {
+      const v = c.get(r, k);
+      const w = c.num ? xlDigits(v) + 2 : Math.min(c.wrap ? 60 : 44, String(v == null ? '' : v).length + 2);
+      if (w > width[j]) width[j] = w;
+      if (c.num) sums[j] += v;
+      return v;
+    }));
   });
-  if (rows.length) ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length, c: cols.length - 1 } }) };
+  if (n && meta.total) {
+    aoa.push([]);                               // satu baris kosong supaya baris TOTAL tidak ikut tersaring
+    aoa.push(cols.map((c, j) => j === 0 ? 'TOTAL' : c.num && !c.noSum ? sums[j] : ''));
+  } else if (!n) aoa.push(['Tidak ada pinjaman di kategori ini.']);
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const cell = (r, j) => ws[L[j] + (r + 1)];     // r = indeks baris (0 = baris pertama)
+  ws['A1'].s = XS.title;
+  lines.forEach((l, i) => { ws['A' + (i + 2)].s = XS[l[1]]; });
+  cols.forEach((c, j) => { cell(hr, j).s = XS.head; });
+  if (!n) ws['A' + (hr + 2)].s = XS.info;
+
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < nc; j++) {
+      const x = cell(hr + 1 + i, j);
+      if (!x) continue;
+      if (cols[j].num) { x.s = XS.num; x.z = XL_NUM; } else x.s = cols[j].wrap ? XS.wrap : cols[j].mid ? XS.mid : XS.text;
+    }
+    if (dupN && isDup(rows[i])) { const x = cell(hr + 1 + i, dupCol); if (x) x.s = XS.dup; }
+  }
+
+  if (n && meta.total) {
+    const tr = last + 2;                         // indeks baris TOTAL
+    cols.forEach((c, j) => {
+      const x = cell(tr, j), sum = j > 0 && c.num && !c.noSum;
+      x.s = sum ? XS.totN : XS.totT;
+      if (sum) { x.z = XL_NUM; x.f = 'SUBTOTAL(109,' + L[j] + (hr + 2) + ':' + L[j] + (last + 1) + ')'; }
+    });
+  }
+
+  const hts = [];
+  hts[0] = { hpt: 26 }; hts[hr] = { hpt: 34 };
+  cols.forEach((c, j) => {
+    if (!c.wrap) return;
+    rows.forEach((r, i) => {
+      const need = Math.ceil(String(c.get(r, k)).length / (width[j] * 1.1)) * 13.5 + 3, cur = hts[hr + 1 + i];
+      if (need > 17 && (!cur || cur.hpt < need)) hts[hr + 1 + i] = { hpt: need };
+    });
+  });
+  ws['!rows'] = hts;
+  ws['!cols'] = width.map(w => ({ wch: w }));
+  ws['!freeze'] = { ySplit: String(hr + 1), topLeftCell: 'A' + (hr + 2), activePane: 'bottomLeft', state: 'frozen' };   // judul kolom tetap terlihat
+  if (n) ws['!autofilter'] = { ref: L[0] + (hr + 1) + ':' + L[nc - 1] + (last + 1) };
+  return ws;
+}
+
+// Sheet "Petunjuk": asal data, isi tiap sheet, arti kolom, dan arti warna. sheets = [[nama sheet, penjelasan]] yang ikut di file ini.
+function guideSheet(sheets) {
+  const d = state.data, u = state.user || {}, mg = nf1.format(d.margin || 0) + '%';
+  const wajib = CATS.filter(c => inc(c.k)).map(c => c.title);
+  const rows = [];
+  const sec = t => rows.push([t, '', true]);
+  const add = (a, b) => rows.push([a, b, false]);
+
+  sec('Tentang data ini');
+  add('Sumber data', d.updated ? 'File ' + (d.file || '-') + ', diunggah ' + fmtStamp(d.updated) + '.' : 'Dihitung langsung oleh server.');
+  add('Diunduh', fmtStamp(stampNow()) + ' oleh ' + (u.nama || u.nik || '-') + (u.tingkat ? ' (' + u.tingkat + ')' : '') + '.');
+  add('Cakupan', 'Hanya cabang yang boleh diakses akun yang mengunduh (' + fmt(state.branches.size) + ' cabang pada data ini).');
+  add('Penyesuaian Margin', mg + '. Total Balance + Margin = Total Balance × (1 + ' + mg + '), dibulatkan ke rupiah. Dipakai pada Pelunasan < 100.000, < 200.000, < 500.000 dan Pelunasan dari Simpanan.');
+  add('Cara hitung simpanan', 'Saldo tiap jenis simpanan dikurangi 2.000 lebih dulu. Simpanan yang saldonya di bawah 2.000 dihitung 0 dan ditulis di kolom Catatan.');
+  add('Simp. Wajib ikut dihitung', wajib.length ? 'Hanya pada: ' + wajib.join(', ') + ' (diatur di menu Setting).' : 'Tidak pada kategori mana pun (diatur di menu Setting).');
+
+  sec('Isi tiap sheet');
+  sheets.forEach(s => add(s[0], s[1]));
+
+  sec('Arti kolom');
+  [
+    ['Branch Name', 'Nama cabang.'],
+    ['Client ID / Client Name', 'Nomor dan nama klien.'],
+    ['Loan No', 'Nomor pinjaman.'],
+    ['Product Name', 'Nama produk pinjaman.'],
+    ['Kode/Staf', 'Kode staf yang memegang pinjaman tersebut.'],
+    ['Total Balance', 'Total saldo pinjaman klien menurut file Excel yang diunggah.'],
+    ['Total Balance + Margin', 'Total Balance ditambah Penyesuaian Margin (' + mg + ').'],
+    ['Cicilan', 'Besar satu kali angsuran (Pokok + Margin).'],
+    ['Simp. Sukarela, Simp. Wajib', 'Saldo simpanan setelah dikurangi 2.000. Kolom Simp. Wajib hanya ada di kategori yang menghitungnya.'],
+    ['Kum. Simpanan', 'Jumlah semua simpanan kecuali Wajib (Sukarela + Pensiun + Hari Raya + Khusus + Qurban + Sipadan).'],
+    ['Total Simpanan', 'Kum. Simpanan + Simp. Wajib.'],
+    ['Sisa Pelunasan', 'Yang masih harus dibayar klien untuk melunasi pinjaman setelah dikurangi simpanan. Minus (angka merah) berarti simpanan sudah melebihi sisa pinjaman.'],
+    ['Total Balance - Simpanan', 'Sama seperti Sisa Pelunasan, tetapi tanpa Penyesuaian Margin (kategori Pelunasan Tanpa Margin).'],
+    ['Jumlah Angsuran', 'Berapa kali angsuran yang dapat ditutup dari simpanan: simpanan ÷ Cicilan, dibulatkan ke bawah.'],
+    ['Keterangan', 'Tertulis YA: pinjaman memenuhi syarat kategori pada sheet tersebut.'],
+    ['Catatan', 'Peringatan bila ada simpanan yang saldonya di bawah 2.000 (disebut jenis simpanannya).'],
+    ['Pinjaman Masuk Kategori', 'Sheet Per Cabang: jumlah pinjaman cabang itu yang masuk minimal satu kategori.'],
+  ].forEach(r => add(r[0], r[1]));
+
+  sec('Tanda dan tips');
+  add('Client ID berlatar merah', 'Client ID yang sama muncul lebih dari sekali di data akun Anda (duplikat).');
+  add('Angka merah', 'Angka negatif, ditulis merah dengan tanda minus.');
+  add('Baris TOTAL', 'Ada di bawah tabel. Memakai rumus SUBTOTAL, jadi ikut berubah saat Anda menyaring data lewat tanda panah di judul kolom.');
+  add('Satu pinjaman, banyak sheet', 'Satu pinjaman bisa masuk lebih dari satu kategori, sehingga jumlah pinjaman antar sheet kategori tidak boleh dijumlahkan.');
+
+  const aoa = [['Petunjuk Membaca File Ini'], ['Dashboard Operasional · ' + fmtStamp(stampNow())], []].concat(rows.map(r => [r[0], r[1]]));
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['A1'].s = XS.title; ws['A2'].s = XS.info;
+  const hts = []; hts[0] = { hpt: 26 };
+  rows.forEach((r, i) => {
+    const x = i + 3, a = ws['A' + (x + 1)], b = ws['B' + (x + 1)];
+    a.s = r[2] ? XS.sec : XS.key; b.s = r[2] ? XS.sec : XS.wrap;
+    const lines = Math.max(Math.ceil(r[1].length / 105), Math.ceil(r[0].length / 31));
+    hts[x] = { hpt: r[2] ? 20 : Math.max(17, lines * 13.5 + 4) };
+  });
+  ws['!rows'] = hts;
+  ws['!cols'] = [{ wch: 30 }, { wch: 105 }];
   return ws;
 }
 
@@ -979,24 +1146,55 @@ async function download(button, work, name) {
   button.disabled = false;
 }
 
+// Penjelasan satu sheet kategori untuk sheet Petunjuk.
+const xlCatNote = (c, n) => c.title + ': ' + c.hint() + ' (' + fmt(n) + ' pinjaman; rumusnya tertulis di bagian atas sheet).';
+
 function exportAll() {
   if (!state.data) return;
   download($('ddl'), wb => {
-    const sumCols = [{ label: 'Kategori', get: c => c.title }, { label: 'Jumlah Baris', get: c => state.byCat[c.k].length, num: true },
+    const d = state.data, add = (ws, name) => XLSX.utils.book_append_sheet(wb, ws, name);
+    const sumCols = [
+      { label: 'Kategori', get: c => c.title },
+      { label: 'Jumlah Pinjaman', get: c => state.byCat[c.k].length, num: true, noSum: true },
       { label: 'Total Balance', get: c => state.byCat[c.k].reduce((a, r) => a + r[F.BALANCE], 0), num: true },
-      { label: 'Simp. Wajib Dihitung', get: c => inc(c.k) ? 'YA' : 'TIDAK' }];
-    XLSX.utils.book_append_sheet(wb, sheetOf(sumCols, CATS), 'Ringkasan');
+      { label: 'Simp. Wajib Dihitung', get: c => inc(c.k) ? 'YA' : 'TIDAK', mid: true },
+      { label: 'Syarat Masuk Kategori', get: c => c.hint(), wrap: true },
+    ];
+    const kpi = 'Pinjaman dicek: ' + fmt(d.scanned) + ' · Masuk minimal satu kategori: ' + fmt(d.rows.length)
+      + (d.scanned ? ' (' + nf1.format(d.rows.length / d.scanned * 100) + '%)' : '')
+      + (d.stats ? ' · Total Balance semua pinjaman dicek: ' + rp(d.stats.balance) + ' · Total Simpanan: ' + rp(d.stats.savings) : '');
+    add(sheetOf(sumCols, CATS, null, { title: 'Ringkasan per Kategori', total: false, lines: [
+      'Jumlah pinjaman dan Total Balance tiap kategori. Satu pinjaman bisa masuk lebih dari satu kategori, jadi angka antar kategori tidak dijumlahkan.',
+      ...xlSource(), [kpi, 'rule']] }), 'Ringkasan Kategori');
+
     const bg = groupsOf('branch').slice().sort((a, b) => collator.compare(a.name, b.name));
-    XLSX.utils.book_append_sheet(wb, sheetOf([{ label: 'Cabang', get: g => g.name }, { label: 'Pinjaman', get: g => g.n, num: true },
-      ...CATS.map(c => ({ label: c.title, get: g => g[c.k], num: true })), { label: 'Total Balance', get: g => g.balance, num: true }], bg), 'Per Cabang');
-    CATS.forEach(c => XLSX.utils.book_append_sheet(wb, sheetOf(excelCols(c), state.byCat[c.k], c.k), c.sheet));
+    add(sheetOf([{ label: 'Cabang', get: g => g.name }, { label: 'Pinjaman Masuk Kategori', get: g => g.n, num: true },
+      ...CATS.map(c => ({ label: c.title, get: g => g[c.k], num: true })), { label: 'Total Balance', get: g => g.balance, num: true }], bg, null,
+      { title: 'Ringkasan per Cabang', total: true, lines: [
+        'Jumlah pinjaman tiap cabang pada setiap kategori. Satu pinjaman dapat masuk lebih dari satu kategori, jadi angka antar kategori tidak untuk dijumlahkan.',
+        ...xlSource()] }), 'Per Cabang');
+
+    CATS.forEach(c => {
+      const rows = state.byCat[c.k];
+      add(sheetOf(excelCols(c), rows, c.k, { title: c.title, total: true, lines: [c.hint(), [xlRule(c), 'rule'], ...xlSource(rows)] }), c.sheet);
+    });
+    add(guideSheet([
+      ['Ringkasan Kategori', 'Jumlah pinjaman dan Total Balance tiap kategori, beserta syarat masuknya.'],
+      ['Per Cabang', 'Jumlah pinjaman tiap cabang pada setiap kategori.'],
+      ...CATS.map(c => [c.sheet, xlCatNote(c, state.byCat[c.k].length)]),
+      ['Petunjuk', 'Halaman ini.'],
+    ]), 'Petunjuk');
   }, 'Dashboard_' + today() + '.xlsx');
 }
 
 function exportView() {   // kategori yang sedang dibuka, lengkap dengan filter & urutan saat ini
   if (!state.data || !state.view.length) return;
-  const c = catOf(state.cat);
-  download($('dxl'), wb => XLSX.utils.book_append_sheet(wb, sheetOf(excelCols(c), state.view, c.k), c.sheet), 'Dashboard_' + c.sheet.replace(/\s+/g, '_') + '_' + today() + '.xlsx');
+  const c = catOf(state.cat), rows = state.view;
+  download($('dxl'), wb => {
+    XLSX.utils.book_append_sheet(wb, sheetOf(excelCols(c), rows, c.k, { title: c.title, total: true,
+      lines: [c.hint(), [xlRule(c), 'rule'], ...xlSource(rows), xlFilterNote()] }), c.sheet);
+    XLSX.utils.book_append_sheet(wb, guideSheet([[c.sheet, xlCatNote(c, rows.length)], ['Petunjuk', 'Halaman ini.']]), 'Petunjuk');
+  }, 'Dashboard_' + c.sheet.replace(/\s+/g, '_') + '_' + today() + '.xlsx');
 }
 
 /* ---------------------------------------------------------------------
