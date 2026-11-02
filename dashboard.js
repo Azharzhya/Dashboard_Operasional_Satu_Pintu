@@ -18,6 +18,7 @@ const CACHE_DB_OLD = 'dash_cache_v2';   // salinan versi lama: dihapus saat hala
 const API_TIMEOUT_MS = 60000;
 const AUTO_SYNC_MS = 2 * 60 * 1000; // pemeriksaan ringan perubahan Wilayah Kerja/data setiap 2 menit saat aplikasi aktif
 const AUTO_SYNC_START_JITTER_MS = 20 * 1000; // sebar waktu mulai antarpengguna agar request tidak menumpuk bersamaan
+const AUTO_SYNC_MAX_PER_LOGIN = 3; // setelah 3 sinkron otomatis, percobaan otomatis ke-4 memaksa login ulang
 let autoSyncTimer = 0;
 let autoSyncStartTimer = 0;
 const PAGE_SIZES = [25, 50, 100, 200];
@@ -267,7 +268,7 @@ function startProgress(label, expectWait, alive) {
    4. Tampilan umum
    --------------------------------------------------------------------- */
 const state = {
-  user: null, loadSeq: 0, loading: false, lastCheck: 0,
+  user: null, sessionToken: '', loadSeq: 0, loading: false, lastCheck: 0,
   data: null, byCat: {}, branches: new Map(), groups: {}, clientIdCounts: new Map(),
   cat: 'a', q: '', branch: '', staf: '', sort: { label: '', dir: 1 }, page: 0, size: 50, view: [],
   sumBy: 'branch', sumSort: { key: 'n', dir: -1 }, sumQ: '', wjDirty: false,
@@ -347,6 +348,25 @@ function stopAutoSync() {
   autoSyncStartTimer = 0;
 }
 
+// Satu penghitung untuk semua pemicu sinkron otomatis (interval dan tab kembali aktif).
+// Disimpan bersama token sesi agar tetap terhitung setelah refresh halaman; login baru meresetnya.
+function reserveAutoSync() {
+  const current = session.get();
+  if (!current || !current.token) {
+    logout('Sesi tidak tersedia. Silakan login kembali.', true);
+    return false;
+  }
+  const used = Math.max(0, Math.floor(Number(current.autoSyncCount) || 0));
+  if (used >= AUTO_SYNC_MAX_PER_LOGIN) {
+    // Jangan kirim request sinkron ke-4. Hapus sesi lokal lalu refresh menuju halaman login.
+    logout('Sesi otomatis dihentikan setelah 3 kali sinkronisasi. Silakan login kembali.', true);
+    return false;
+  }
+  current.autoSyncCount = used + 1;
+  session.set(current);
+  return true;
+}
+
 function startAutoSync() {
   stopAutoSync();
   const poll = () => {
@@ -367,13 +387,18 @@ function startAutoSync() {
   }, firstDelay);
 }
 
-function logout(msg) {
+function logout(msg, forceRefresh) {
   stopAutoSync();
-  state.loadSeq++; state.loading = false; state.user = null; state.data = null; state.byCat = {}; state.groups = {}; state.clientIdCounts = new Map(); state.wjDirty = false;
-  session.clear(); cache.clear(); state.wilayah = null; state.wilayahDraft = []; state.wilayahDrafts = Object.create(null); state.wilayahSelected = ''; setNote('wjmsg', '');
+  state.loadSeq++; state.loading = false; state.user = null; state.sessionToken = ''; state.data = null; state.byCat = {}; state.groups = {}; state.clientIdCounts = new Map(); state.wjDirty = false;
+  session.clear();
+  const cacheClear = cache.clear();
+  state.wilayah = null; state.wilayahDraft = []; state.wilayahDrafts = Object.create(null); state.wilayahSelected = ''; setNote('wjmsg', '');
   state.rekening = null; state.rekeningLoadedAt = 0; state.rekeningLoading = false;
   clearDash(); resetUpload();
   showView('login', msg || '');
+  // Hanya logout otomatis karena batas sinkron yang memaksa refresh penuh.
+  // Refresh dilakukan setelah cache lokal selesai dibersihkan; tidak ada request logout ke server.
+  if (forceRefresh) Promise.resolve(cacheClear).finally(() => window.location.reload());
 }
 
 async function submitLogin(ev) {
@@ -389,7 +414,7 @@ async function submitLogin(ev) {
   go.disabled = false;
   go.replaceChildren(h('span', { id: 'gotxt', text: 'Masuk' }));
   if (!r.ok) return showErr(r.error || 'Login gagal.');
-  session.set({ token: r.token, expires: r.expires, user: r.user });
+  session.set({ token: r.token, expires: r.expires, user: r.user, autoSyncCount: 0 });
   $('pw').value = '';
   enterApp(r.user);
 }
@@ -399,6 +424,7 @@ async function submitLogin(ev) {
    --------------------------------------------------------------------- */
 function enterApp(user) {
   state.user = user;
+  state.sessionToken = (session.get() || {}).token || '';
   paintUser(user);
   state.cat = 'a'; state.q = ''; state.branch = ''; state.staf = ''; state.page = 0; state.sort = { label: '', dir: 1 };
   resetUpload(); setNote('setmsg', ''); setNote('wjmsg', ''); setNote('rb-setting-msg', ''); state.wjDirty = false;
@@ -449,6 +475,12 @@ async function loadDash(options) {
       savedDash = saved.data;
     } else skeletonCards();
   }
+  // Hitung satu kali per siklus sinkron otomatis, bukan per request internal/retry.
+  const countedAutoSync = !!(options && options.autoSyncCounted);
+  if (automatic && !countedAutoSync && !reserveAutoSync()) {
+    state.loading = false; $('dref').disabled = false;
+    return;
+  }
   const requestVer = state.data ? state.data.ver : (savedDash ? savedDash.ver : '');
   const pv = perf.get(), prog = startProgress(state.data ? 'Memeriksa pembaruan' : 'Memverifikasi akses dan mengambil data',
     state.data ? pv.same : pv.full, () => seq === state.loadSeq && state.loading);
@@ -485,7 +517,7 @@ async function loadDash(options) {
     setSync('Data tersimpan sesuai dengan Wilayah Kerja saat ini.');
     return;
   }
-  if (r.same) return loadDashFresh();
+  if (r.same) return loadDashFresh(automatic ? { automatic: true, autoSyncCounted: true } : undefined);
   prog.process();
   // Detail lama dapat memuat cabang yang baru saja dicabut. Tutup sebelum data baru dipasang.
   if (hadData && $('detail').open) $('detail').close();
@@ -500,7 +532,7 @@ async function loadDash(options) {
   if (window.requestIdleCallback) window.requestIdleCallback(keep, { timeout: 2000 }); else setTimeout(keep, 200);
 }
 
-async function loadDashFresh() { state.data = null; state.loading = false; await cache.clear(); return loadDash(); }
+async function loadDashFresh(options) { state.data = null; state.loading = false; await cache.clear(); return loadDash(options); }
 
 function showLoadError(msg) {
   setNote('dmsg', msg, 'bad');
@@ -1368,6 +1400,7 @@ async function loadRekeningBergerak(options) {
   if (!(options && options.automatic)) $('rb-sync').textContent = 'Mengambil rekap dari Data_Upload…';
   setNote('rb-msg', '');
   try {
+    if (options && options.automatic && !reserveAutoSync()) return;
     const r = await api('webRekeningBergerak', { token: (session.get() || {}).token }, { retry: true });
     if (r.code === 'SESSION_REQUIRED') return logout(r.error);
     if (!r.ok) {
@@ -1811,11 +1844,20 @@ function bind() {
   });
   document.addEventListener('visibilitychange', () => {
     // Begitu aplikasi kembali aktif, periksa versi/ruang lingkup di server tanpa menunggu interval.
-    // loadDash memakai ver yang sedang dimiliki: jika sama, server hanya mengirim respons kecil (same:true).
+    // Pemicu ini menggunakan penghitung yang sama dengan interval berkala.
     if (!document.hidden && state.user) {
       if (!$('p-dashboard').hidden && state.dashboardPage === 'move') {
         if (!state.rekeningLoading) loadRekeningBergerak({ automatic: true });
       } else if (state.data && !state.loading) loadDash({ automatic: true });
+    }
+  });
+  // Jika sesi dihapus dari tab lain (mis. batas 3 sinkron otomatis tercapai), hentikan tab ini juga.
+  window.addEventListener('storage', e => {
+    if (e.key !== SESSION_KEY || !state.user) return;
+    let next = null;
+    try { next = e.newValue ? JSON.parse(e.newValue) : null; } catch (err) { next = null; }
+    if (!next || next.token !== state.sessionToken) {
+      logout('Sesi telah berakhir di tab lain. Silakan login kembali.', true);
     }
   });
 }
@@ -1825,6 +1867,9 @@ async function init() {
   try { indexedDB.deleteDatabase(CACHE_DB_OLD); } catch (e) { /* abaikan */ }   // salinan data versi lama tidak dipakai lagi
   const s = session.get();
   if (!s || !s.token || !(s.expires > Date.now())) { session.clear(); return showView('login'); }
+  if (!Number.isInteger(Number(s.autoSyncCount)) || Number(s.autoSyncCount) < 0) {
+    s.autoSyncCount = 0; session.set(s); // kompatibilitas sesi yang dibuat sebelum batas sinkron otomatis ditambahkan
+  }
   if (s.user) { enterApp(s.user); return; }                // pengguna tersimpan: langsung tampil, server memverifikasi sambil memuat data
   const r = await api('webMe', { token: s.token }, { retry: true });   // sesi dari versi lama (belum menyimpan pengguna)
   if (r.ok) { session.set(Object.assign(s, { user: r.user })); return enterApp(r.user); }
