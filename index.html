@@ -109,19 +109,19 @@
       <section class="rb-kpis" id="rb-kpis" aria-label="Indikator Rekening Bergerak">
         <article class="rb-kpi">
           <span class="rb-kpi-icon green" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h3"/></svg></span>
-          <div><span class="rb-kpi-label">Total Rekening PAR</span><strong id="rb-kpi-total">—</strong><small>Seluruh rekening pada cakupan Anda</small></div>
+          <div><span class="rb-kpi-label">Total Rekening PAR</span><strong id="rb-kpi-total">—</strong><small>Seluruh rekening anggota PAR</small></div>
         </article>
         <article class="rb-kpi">
           <span class="rb-kpi-icon yellow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 17 9 11l4 4 8-9"/><path d="M15 6h6v6"/></svg></span>
-          <div><span class="rb-kpi-label">Rekening Bergerak</span><strong id="rb-kpi-active">—</strong><small>Transaksi pada atau setelah tanggal N</small></div>
+          <div><span class="rb-kpi-label">Rekening Bergerak</span><strong id="rb-kpi-active">—</strong><small>Jumlah rekening yang memiliki penerimaan lapang (Angsuran)</small></div>
         </article>
         <article class="rb-kpi">
           <span class="rb-kpi-icon green" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19V5m0 14h16M8 15l4-4 3 2 5-6"/></svg></span>
-          <div><span class="rb-kpi-label">Persentase Bergerak</span><strong id="rb-kpi-percent">—</strong><small>Bergerak dibanding total PAR</small></div>
+          <div><span class="rb-kpi-label">Persentase Bergerak</span><strong id="rb-kpi-percent">—</strong><small>Perbandingan rekening bergerak dengan total rekening PAR</small></div>
         </article>
         <article class="rb-kpi">
           <span class="rb-kpi-icon yellow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 2.8 19h18.4L12 3Z"/><path d="M12 9v4m0 3h.01"/></svg></span>
-          <div><span class="rb-kpi-label">Tanggal Tidak Terisi</span><strong id="rb-kpi-missing">—</strong><small>Tetap masuk Total Rekening PAR</small></div>
+          <div><span class="rb-kpi-label">Rekening Transaksi Kosong</span><strong id="rb-kpi-missing">—</strong><small>Rekening dengan tanggal transaksi terakhir yang kosong</small></div>
         </article>
       </section>
       <div id="rb-config-note" class="rb-notice" role="status" hidden></div>
@@ -266,9 +266,9 @@
 
       <form class="setbox" id="rb-setting-form" novalidate>
         <h2>Rekening PAR Bergerak</h2>
-        <p>Tentukan tanggal N sebagai batas Rekening Bergerak. Rekening dihitung bergerak bila nilai Trans Pinj Terakhir pada Data_Upload lebih dari atau sama dengan tanggal ini. Tahun pada judul kolom mengikuti tahun tanggal N.</p>
+        <p>Tentukan acuan sebagai batas Rekening Bergerak. Rekening dihitung bergerak bila nilai Trans Pinj Terakhir pada Data_Upload lebih dari atau sama dengan tanggal ini. Tahun pada judul kolom mengikuti tahun acuan.</p>
         <div class="setrow">
-          <label for="rb-setting-date">Tanggal N</label>
+          <label for="rb-setting-date">Acuan</label>
           <input id="rb-setting-date" type="date" required>
           <button class="btn fit" id="rb-setting-save" type="submit">Simpan</button>
         </div>
