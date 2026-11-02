@@ -272,6 +272,9 @@ const state = {
   cat: 'a', q: '', branch: '', staf: '', sort: { label: '', dir: 1 }, page: 0, size: 50, view: [],
   sumBy: 'branch', sumSort: { key: 'n', dir: -1 }, sumQ: '', wjDirty: false,
   wilayah: null, wilayahSelected: '', wilayahDraft: [], wilayahDrafts: Object.create(null), wilayahLoading: false, wilayahLoadedAt: 0,
+  rekening: null, rekeningLoading: false, rekeningLoadedAt: 0, dashboardPage: 'move',
+  rbView: 'branch', rbSearch: { branch: '', coordinator: '' },
+  rbSort: { branch: { key: 'name', dir: 1 }, coordinator: { key: 'name', dir: 1 } },
 };
 
 function showView(name, msg) {
@@ -283,17 +286,34 @@ function showView(name, msg) {
 function showErr(msg) { $('err').hidden = !msg; $('err').textContent = msg || ''; }
 
 const canSetting = u => !!u && (u.tingkat === 'ADMINISTRATOR' || u.tingkat === 'USER 0');   // menu Setting
-const TABS = ['dash', 'sum', 'set', 'up'];
+const TABS = ['dashboard', 'set', 'up'];
+function selectDashboardPage(which) {
+  if (which !== 'move' && which !== 'dash' && which !== 'sum') which = 'move';
+  state.dashboardPage = which;
+  $('p-move').hidden = which !== 'move';
+  $('p-dash').hidden = which !== 'dash';
+  $('p-sum').hidden = which !== 'sum';
+  document.querySelectorAll('[data-dashpage]').forEach(b =>
+    b.setAttribute('aria-pressed', String(b.dataset.dashpage === which)));
+  if (which === 'move' && state.user && !state.rekeningLoading
+      && (!state.rekening || Date.now() - state.rekeningLoadedAt > AUTO_SYNC_MS)) loadRekeningBergerak();
+  if (which === 'dash' && state.user && !state.loading
+      && (!state.data || Date.now() - state.lastCheck > AUTO_SYNC_MS)) loadDash();
+  if (which === 'sum') {
+    drawSummary();
+    if (state.user && !state.data && !state.loading) loadDash();
+  }
+}
 function selectTab(which, focus) {
-  if (which === 'up' && (!state.user || state.user.tingkat !== 'ADMINISTRATOR')) which = 'dash';
-  if (which === 'set' && !canSetting(state.user)) which = 'dash';
+  if (which === 'up' && (!state.user || state.user.tingkat !== 'ADMINISTRATOR')) which = 'dashboard';
+  if (which === 'set' && !canSetting(state.user)) which = 'dashboard';
   TABS.forEach(k => {
     const on = k === which;
     $('t-' + k).setAttribute('aria-selected', String(on));
     $('t-' + k).tabIndex = on ? 0 : -1;
     $('p-' + k).hidden = !on;
   });
-  if (which === 'sum') drawSummary();
+  if (which === 'dashboard') selectDashboardPage(state.dashboardPage || 'move');
   if (focus) $('t-' + which).focus();
 }
 
@@ -303,7 +323,7 @@ function paintUser(user) {
   $('ulevel').textContent = user.tingkat || '';
   $('uavatar').textContent = name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
   $('t-set').hidden = !canSetting(user);
-  if (!canSetting(user) && !$('p-set').hidden) selectTab('dash');
+  if (!canSetting(user) && !$('p-set').hidden) selectTab('dashboard');
   $('t-up').hidden = user.tingkat !== 'ADMINISTRATOR';   // hanya tampilan; penegakan sebenarnya di server
 }
 
@@ -332,8 +352,10 @@ function startAutoSync() {
   const poll = () => {
     // Polling hanya saat aplikasi aktif dan data awal sudah tersedia.
     // Jika tidak ada perubahan, server menjawab same:true dengan respons ringan.
-    if (!state.user || document.hidden || state.loading || !state.data) return;
-    loadDash({ automatic: true });
+    if (!state.user || document.hidden) return;
+    if (!$('p-dashboard').hidden && state.dashboardPage === 'move') {
+      if (!state.rekeningLoading) loadRekeningBergerak({ automatic: true });
+    } else if (state.data && !state.loading) loadDash({ automatic: true });
   };
   // Jarak pemeriksaan tetap 2 menit; waktu pemeriksaan pertama disebar acak 0–20 detik
   // setelah interval pertama agar perangkat yang login berdekatan tidak menumpuk request-nya.
@@ -349,6 +371,7 @@ function logout(msg) {
   stopAutoSync();
   state.loadSeq++; state.loading = false; state.user = null; state.data = null; state.byCat = {}; state.groups = {}; state.clientIdCounts = new Map(); state.wjDirty = false;
   session.clear(); cache.clear(); state.wilayah = null; state.wilayahDraft = []; state.wilayahDrafts = Object.create(null); state.wilayahSelected = ''; setNote('wjmsg', '');
+  state.rekening = null; state.rekeningLoadedAt = 0; state.rekeningLoading = false;
   clearDash(); resetUpload();
   showView('login', msg || '');
 }
@@ -378,9 +401,17 @@ function enterApp(user) {
   state.user = user;
   paintUser(user);
   state.cat = 'a'; state.q = ''; state.branch = ''; state.staf = ''; state.page = 0; state.sort = { label: '', dir: 1 };
-  resetUpload(); setNote('setmsg', ''); setNote('wjmsg', ''); state.wjDirty = false; selectTab('dash'); showView('app');
+  resetUpload(); setNote('setmsg', ''); setNote('wjmsg', ''); setNote('rb-setting-msg', ''); state.wjDirty = false;
+  state.rekening = null; state.rekeningLoadedAt = 0;
+  state.dashboardPage = 'move';
+  state.rbSearch = { branch: '', coordinator: '' };
+  state.rbSort = { branch: { key: 'name', dir: 1 }, coordinator: { key: 'name', dir: 1 } };
+  $('rb-branch-q').value = ''; $('rb-coordinator-q').value = '';
+  selectRekeningTable('branch');
+  selectTab('dashboard'); showView('app');
   startAutoSync();
-  loadDash();
+  loadRekeningBergerak();
+  loadDash(); // pertahankan preload Tool PAR dan nilai Setting seperti versi sebelumnya
 }
 
 function clearDash() {
@@ -785,7 +816,8 @@ function drill(kind, value, branch, cat) {
   state.q = ''; $('dq').value = ''; state.page = 0;
   if (kind === 'branch') { state.branch = value; state.staf = ''; } else { state.branch = branch; state.staf = value; }
   $('dbranch').value = state.branch; fillStafOptions(); $('dstaf').value = state.staf;
-  selectTab('dash');
+  state.dashboardPage = 'dash';
+  selectTab('dashboard');
   showCat(cat || state.cat, true);
   $('dtitle').scrollIntoView({ block: 'start' });
 }
@@ -1198,6 +1230,275 @@ function exportView() {   // kategori yang sedang dibuka, lengkap dengan filter 
 }
 
 /* ---------------------------------------------------------------------
+   Dashboard: Rekening Bergerak
+   --------------------------------------------------------------------- */
+function rbDateLabel(value) {
+  return value ? fmtStamp(value) : 'Belum diatur';
+}
+
+function rbSortValue(row, key, kind) {
+  if (key === 'name') return kind === 'branch' ? (row.branch || '') : (row.name || '');
+  return Number(row[key]) || 0;
+}
+
+function rbRenderTable(id, rows, firstLabel, year, kind) {
+  const table = $(id);
+  const headers = [
+    { key: 'name', label: firstLabel, text: true },
+    { key: 'total', label: 'Total Rekening PAR' },
+    { key: 'active', label: 'Rekening Bergerak Tahun ' + (year || '…') },
+    { key: 'deviation', label: 'Deviasi' },
+    { key: 'percent', label: 'Persentasi (%)' },
+  ];
+  const query = (state.rbSearch[kind] || '').trim().toLocaleLowerCase('id-ID');
+  const sort = state.rbSort[kind];
+  let visible = (rows || []).filter(r => !query || String(kind === 'branch' ? r.branch : r.name || '').toLocaleLowerCase('id-ID').includes(query));
+  visible = visible.slice().sort((a, b) => {
+    const av = rbSortValue(a, sort.key, kind), bv = rbSortValue(b, sort.key, kind);
+    const cmp = typeof av === 'string' ? collator.compare(av, bv) : av - bv;
+    return cmp * sort.dir;
+  });
+  const totals = visible.reduce((a, r) => {
+    a.total += Number(r.total) || 0;
+    a.active += Number(r.active) || 0;
+    return a;
+  }, { total: 0, active: 0 });
+  const totalDeviation = totals.active - totals.total;
+  const totalPercent = totals.total ? Math.round(totals.active / totals.total * 1000) / 10 : 0;
+  const thead = h('thead', null, h('tr', null, headers.map((item, i) => {
+    const activeSort = sort.key === item.key;
+    return h('th', { scope: 'col', class: i ? 'num' : '', 'aria-sort': activeSort ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none' },
+      h('button', { type: 'button', class: 'th', 'data-rb-sort': item.key, 'data-rb-kind': kind,
+        'aria-label': 'Urutkan berdasarkan ' + item.label, text: item.label }));
+  })));
+  const tbody = h('tbody');
+  if (!visible.length) {
+    tbody.append(h('tr', { class: 'rb-empty-row' }, h('td', { colspan: '5', text: query ? 'Tidak ada hasil yang cocok dengan pencarian.' : 'Tidak ada data pada cakupan Wilayah Kerja ini.' })));
+  } else {
+    visible.forEach(r => tbody.append(h('tr', null,
+      h('td', { text: kind === 'branch' ? (r.branch || '(tanpa nama)') : (r.name || '(tanpa nama)') }),
+      h('td', { class: 'num', text: fmt(r.total) }),
+      h('td', { class: 'num', text: fmt(r.active) }),
+      h('td', { class: 'num rb-deviation', text: fmt(r.deviation) }),
+      h('td', { class: 'num', text: nf1.format(r.percent) + '%' })
+    )));
+  }
+  const tfoot = h('tfoot', null, h('tr', null,
+    h('td', { text: query ? 'TOTAL HASIL FILTER' : 'TOTAL' }),
+    h('td', { class: 'num', text: fmt(totals.total) }),
+    h('td', { class: 'num', text: fmt(totals.active) }),
+    h('td', { class: 'num rb-deviation', text: fmt(totalDeviation) }),
+    h('td', { class: 'num', text: nf1.format(totalPercent) + '%' })
+  ));
+  put(table, thead, tbody, tfoot);
+  const count = $(kind === 'branch' ? 'rb-branch-count' : 'rb-coordinator-count');
+  if (count) count.textContent = 'Menampilkan ' + fmt(visible.length) + ' dari ' + fmt((rows || []).length) + (kind === 'branch' ? ' cabang' : ' Branch Coordinator');
+}
+
+function refreshRBTable(kind) {
+  const data = state.rekening;
+  if (!data || data.settingRequired) return;
+  if (kind === 'branch') rbRenderTable('rb-branch-tbl', data.branchRows || [], 'Cabang', data.year, 'branch');
+  else rbRenderTable('rb-coordinator-tbl', data.coordinatorRows || [], 'Branch Coordinator (Nama)', data.year, 'coordinator');
+}
+
+function selectRekeningTable(which) {
+  if (which !== 'branch' && which !== 'coordinator') which = 'branch';
+  state.rbView = which;
+  $('rb-panel-branch').hidden = which !== 'branch';
+  $('rb-panel-coordinator').hidden = which !== 'coordinator';
+  document.querySelectorAll('[data-rb-view]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.rbView === which)));
+}
+
+function paintRBKpis(data) {
+  const branchRows = data.branchRows || [];
+  const totals = branchRows.reduce((a, r) => {
+    a.total += Number(r.total) || 0;
+    a.active += Number(r.active) || 0;
+    return a;
+  }, { total: 0, active: 0 });
+  $('rb-kpi-total').textContent = fmt(data.totalRows == null ? totals.total : data.totalRows);
+  $('rb-kpi-active').textContent = fmt(totals.active);
+  $('rb-kpi-percent').textContent = (totals.total ? nf1.format(totals.active / totals.total * 100) : '0') + '%';
+  $('rb-kpi-missing').textContent = fmt(data.missingDateCount || 0);
+  $('rb-period-chip').textContent = 'Tahun acuan ' + (data.year || '—');
+}
+
+function paintRekeningBergerak(data) {
+  const isRequired = !!data.settingRequired;
+  $('rb-setting-current').textContent = rbDateLabel(data.settingDate);
+  if (document.activeElement !== $('rb-setting-date')) $('rb-setting-date').value = data.settingDate || '';
+  if (isRequired) {
+    $('rb-kpis').hidden = true;
+    $('rb-period-chip').textContent = 'Tanggal N belum diatur';
+    $('rb-meta').textContent = 'Tanggal N belum ditentukan. Penghitungan Rekening Bergerak belum dapat ditampilkan.';
+    $('rb-config-note').hidden = false;
+    $('rb-config-note').textContent = canSetting(state.user)
+      ? 'Atur tanggal N melalui menu Setting → Fitur: Rekening PAR Bergerak, kemudian muat ulang dashboard.'
+      : 'Administrator atau User 0 belum menetapkan tanggal N. Hubungi administrator untuk mengaktifkan dashboard ini.';
+    $('rb-warning').hidden = true;
+    put($('rb-branch-tbl')); put($('rb-coordinator-tbl'));
+    $('rb-branch-count').textContent = 'Menunggu tanggal N';
+    $('rb-coordinator-count').textContent = 'Menunggu tanggal N';
+    $('rb-xlsx').disabled = true;
+    return;
+  }
+  $('rb-config-note').hidden = true;
+  $('rb-kpis').hidden = false;
+  paintRBKpis(data);
+  $('rb-meta').textContent = 'Tanggal N: ' + rbDateLabel(data.settingDate) + ' · Tahun acuan: ' + data.year
+    + ' · Total rekening pada cakupan Anda: ' + fmt(data.totalRows || 0);
+  refreshRBTable('branch');
+  refreshRBTable('coordinator');
+  const warnings = [];
+  if (data.missingDateCount) warnings.push(fmt(data.missingDateCount) + ' baris memiliki Trans Pinj Terakhir kosong. Data tetap dihitung ke Total Rekening PAR, tetapi tidak dihitung sebagai Rekening Bergerak.');
+  if (data.invalidDateCount) warnings.push(fmt(data.invalidDateCount) + ' baris memiliki Trans Pinj Terakhir dengan format tanggal tidak valid; data tetap dihitung ke Total Rekening PAR, tetapi tidak dihitung sebagai Rekening Bergerak.');
+  if (data.unassignedBranchCount) warnings.push(fmt(data.unassignedBranchCount) + ' baris tidak memiliki Branch Name sehingga tidak dapat dimasukkan ke rekap per cabang.');
+  if (data.scopeMessage) warnings.push(data.scopeMessage);
+  $('rb-warning').hidden = !warnings.length;
+  $('rb-warning').textContent = warnings.join(' ');
+  $('rb-xlsx').disabled = false;
+}
+
+async function loadRekeningBergerak(options) {
+  if (state.rekeningLoading || !state.user) return;
+  state.rekeningLoading = true;
+  $('rb-ref').disabled = true;
+  $('rb-xlsx').disabled = true;
+  if (!(options && options.automatic)) $('rb-sync').textContent = 'Mengambil rekap dari Data_Upload…';
+  setNote('rb-msg', '');
+  try {
+    const r = await api('webRekeningBergerak', { token: (session.get() || {}).token }, { retry: true });
+    if (r.code === 'SESSION_REQUIRED') return logout(r.error);
+    if (!r.ok) {
+      state.rekening = null;
+      $('rb-meta').textContent = 'Data Rekening Bergerak gagal dimuat.';
+      $('rb-kpis').hidden = true;
+      $('rb-config-note').hidden = false;
+      $('rb-config-note').textContent = r.error || 'Terjadi kesalahan saat mengambil data.';
+      put($('rb-branch-tbl')); put($('rb-coordinator-tbl'));
+      $('rb-branch-count').textContent = 'Data tidak tersedia';
+      $('rb-coordinator-count').textContent = 'Data tidak tersedia';
+      $('rb-warning').hidden = true;
+      put($('rb-branch-tbl')); put($('rb-coordinator-tbl'));
+      return;
+    }
+    state.rekening = r;
+    state.rekeningLoadedAt = Date.now();
+    paintRekeningBergerak(r);
+    $('rb-sync').textContent = 'Terakhir diperbarui: ' + new Date(state.rekeningLoadedAt).toLocaleString('id-ID');
+  } catch (err) {
+    state.rekening = null;
+    $('rb-meta').textContent = 'Data Rekening Bergerak gagal dimuat.';
+    $('rb-kpis').hidden = true;
+    $('rb-config-note').hidden = false;
+    $('rb-config-note').textContent = err && err.message ? err.message : 'Jaringan tidak dapat dihubungi. Periksa koneksi lalu muat ulang.';
+    put($('rb-branch-tbl')); put($('rb-coordinator-tbl'));
+    $('rb-branch-count').textContent = 'Data tidak tersedia';
+    $('rb-coordinator-count').textContent = 'Data tidak tersedia';
+    $('rb-xlsx').disabled = true;
+  } finally {
+    state.rekeningLoading = false;
+    $('rb-ref').disabled = false;
+  }
+}
+
+async function saveRekeningBergerakSetting() {
+  const value = $('rb-setting-date').value;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    $('rb-setting-date').classList.add('bad');
+    return setNote('rb-setting-msg', 'Pilih tanggal N yang valid.', 'bad');
+  }
+  const ok = await askConfirm('Simpan tanggal N?', 'Rekening dengan Trans Pinj Terakhir pada atau setelah ' + rbDateLabel(value)
+    + ' akan dihitung sebagai Rekening Bergerak. Pengaturan ini berlaku untuk semua pengguna.', 'Simpan');
+  if (!ok) return;
+  $('rb-setting-save').disabled = true;
+  setNote('rb-setting-msg', 'Menyimpan tanggal N…');
+  try {
+    const r = await api('webSetRekeningBergerak', { token: (session.get() || {}).token, value: value });
+    if (r.code === 'SESSION_REQUIRED') return logout(r.error);
+    if (!r.ok) return setNote('rb-setting-msg', r.error || 'Gagal menyimpan tanggal N.', 'bad');
+    $('rb-setting-date').value = r.dateN;
+    $('rb-setting-current').textContent = rbDateLabel(r.dateN);
+    setNote('rb-setting-msg', 'Tanggal N tersimpan: ' + rbDateLabel(r.dateN) + '.', 'good');
+    state.rekening = null;
+    await loadRekeningBergerak();
+  } catch (err) {
+    setNote('rb-setting-msg', err && err.message ? err.message : 'Gagal menyimpan tanggal N.', 'bad');
+  } finally {
+    $('rb-setting-save').disabled = false;
+  }
+}
+
+function rbExcelSheet(rows, title, firstLabel, year, data) {
+  const header = [firstLabel, 'Total Rekening PAR', 'Rekening Bergerak Tahun ' + year, 'Deviasi', 'Persentasi (%)'];
+  const total = rows.reduce((a, r) => {
+    a.total += Number(r.total) || 0;
+    a.active += Number(r.active) || 0;
+    return a;
+  }, { total: 0, active: 0 });
+  const percent = total.total ? Math.round(total.active / total.total * 1000) / 10 : 0;
+  const aoa = [[title], ['Tanggal N: ' + rbDateLabel(data.settingDate)], [], header];
+  rows.forEach(r => aoa.push([r.branch || r.name, r.total, r.active, r.deviation, r.percent]));
+  aoa.push(['TOTAL', total.total, total.active, total.active - total.total, percent]);
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } }];
+  ws['!cols'] = [{ wch: 38 }, { wch: 22 }, { wch: 30 }, { wch: 16 }, { wch: 18 }];
+  ws['!rows'] = [{ hpt: 28 }, { hpt: 22 }, { hpt: 8 }, { hpt: 34 }];
+  const style = (fill, color, bold, align) => ({
+    font: { name: 'Aptos', sz: 10, bold: !!bold, color: { rgb: color || '18352B' } },
+    fill: { patternType: 'solid', fgColor: { rgb: fill } },
+    alignment: { vertical: 'center', horizontal: align || 'left', wrapText: true },
+    border: { bottom: { style: 'thin', color: { rgb: 'D5E5DC' } } }
+  });
+  if (ws.A1) ws.A1.s = { font: { name: 'Aptos Display', sz: 16, bold: true, color: { rgb: 'FFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: '064E3B' } }, alignment: { vertical: 'center', horizontal: 'left' } };
+  if (ws.A2) ws.A2.s = { font: { name: 'Aptos', sz: 10, color: { rgb: '405D50' }, italic: true }, alignment: { vertical: 'center' } };
+  for (let c = 0; c < 5; c++) {
+    const cell = XLSX.utils.encode_cell({ r: 3, c });
+    if (ws[cell]) ws[cell].s = style('0A7A5A', 'FFFFFF', true, c ? 'center' : 'left');
+  }
+  for (let r = 0; r < rows.length; r++) {
+    const rowIndex = 4 + r;
+    ws['!rows'][rowIndex] = { hpt: 20 };
+    for (let c = 0; c < 5; c++) {
+      const cell = XLSX.utils.encode_cell({ r: rowIndex, c });
+      if (!ws[cell]) continue;
+      ws[cell].s = style(r % 2 ? 'F5FAF7' : 'FFFFFF', '18352B', false, c ? 'right' : 'left');
+      if (c > 0) ws[cell].z = c === 4 ? '0.0"%"' : '#,##0;[Red]-#,##0';
+    }
+  }
+  const totalRow = 4 + rows.length;
+  ws['!rows'][totalRow] = { hpt: 24 };
+  for (let c = 0; c < 5; c++) {
+    const cell = XLSX.utils.encode_cell({ r: totalRow, c });
+    if (!ws[cell]) continue;
+    ws[cell].s = style('E3F5ED', '064E3B', true, c ? 'right' : 'left');
+    if (c > 0) ws[cell].z = c === 4 ? '0.0"%"' : '#,##0;[Red]-#,##0';
+  }
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 3, c: 0 }, e: { r: 3 + rows.length, c: 4 } }) };
+  return ws;
+}
+
+async function exportRekeningBergerak() {
+  const data = state.rekening;
+  if (!data || data.settingRequired || !data.settingDate) return;
+  $('rb-xlsx').disabled = true;
+  setNote('rb-msg', 'Menyiapkan file Excel…');
+  try {
+    await Promise.all([loadXLSX(), nextFrame()]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, rbExcelSheet(data.branchRows || [], 'REKENING BERGERAK PER CABANG', 'Cabang', data.year, data), 'Per Cabang');
+    XLSX.utils.book_append_sheet(wb, rbExcelSheet(data.coordinatorRows || [], 'REKENING BERGERAK PER BRANCH COORDINATOR', 'Branch Coordinator (Nama)', data.year, data), 'Per BC');
+    XLSX.writeFile(wb, 'Rekening_Bergerak_' + data.settingDate + '.xlsx');
+    setNote('rb-msg', 'File Excel berhasil dibuat dengan dua sheet dan baris total.', 'good');
+  } catch (err) {
+    setNote('rb-msg', err && err.message ? err.message : 'Gagal membuat file Excel.', 'bad');
+  } finally {
+    $('rb-xlsx').disabled = false;
+  }
+}
+
+/* ---------------------------------------------------------------------
    Setting: Penyesuaian Margin (ADMINISTRATOR dan USER 0; server memeriksa ulang)
    --------------------------------------------------------------------- */
 async function saveMargin() {
@@ -1415,6 +1716,7 @@ function bind() {
 
   // Tab (dengan panah kiri/kanan)
   TABS.forEach(k => { $('t-' + k).onclick = () => selectTab(k); });
+  document.querySelectorAll('[data-dashpage]').forEach(b => b.addEventListener('click', () => selectDashboardPage(b.dataset.dashpage)));
   $('app').querySelector('.tabs').addEventListener('keydown', e => {
     const vis = TABS.filter(k => !$('t-' + k).hidden), i = vis.findIndex(k => $('t-' + k).getAttribute('aria-selected') === 'true');
     const to = e.key === 'ArrowRight' ? vis[(i + 1) % vis.length] : e.key === 'ArrowLeft' ? vis[(i - 1 + vis.length) % vis.length]
@@ -1422,7 +1724,29 @@ function bind() {
     if (to) { e.preventDefault(); selectTab(to, true); }
   });
 
-  // Dashboard
+  // Dashboard: Rekening Bergerak
+  $('rb-ref').onclick = () => loadRekeningBergerak();
+  $('rb-xlsx').onclick = exportRekeningBergerak;
+  document.querySelectorAll('[data-rb-view]').forEach(b => b.addEventListener('click', () => selectRekeningTable(b.dataset.rbView)));
+  $('rb-branch-q').addEventListener('input', debounce(() => { state.rbSearch.branch = $('rb-branch-q').value; refreshRBTable('branch'); }, 120));
+  $('rb-coordinator-q').addEventListener('input', debounce(() => { state.rbSearch.coordinator = $('rb-coordinator-q').value; refreshRBTable('coordinator'); }, 120));
+  $('rb-branch-tbl').addEventListener('click', e => {
+    const btn = e.target.closest('[data-rb-sort]'); if (!btn) return;
+    const sort = state.rbSort.branch;
+    sort.dir = sort.key === btn.dataset.rbSort ? sort.dir * -1 : 1; sort.key = btn.dataset.rbSort;
+    refreshRBTable('branch');
+  });
+  $('rb-coordinator-tbl').addEventListener('click', e => {
+    const btn = e.target.closest('[data-rb-sort]'); if (!btn) return;
+    const sort = state.rbSort.coordinator;
+    sort.dir = sort.key === btn.dataset.rbSort ? sort.dir * -1 : 1; sort.key = btn.dataset.rbSort;
+    refreshRBTable('coordinator');
+  });
+  selectRekeningTable('branch');
+  $('rb-setting-form').addEventListener('submit', e => { e.preventDefault(); saveRekeningBergerakSetting(); });
+  $('rb-setting-date').addEventListener('input', () => { $('rb-setting-date').classList.remove('bad'); setNote('rb-setting-msg', ''); });
+
+  // Dashboard Tool PAR (dashboard lama)
   $('dref').onclick = () => loadDash();
   $('ddl').onclick = exportAll;
   $('dxl').onclick = exportView;
@@ -1483,13 +1807,15 @@ function bind() {
 
   // Pintasan: "/" langsung ke kolom cari; tab dibuka kembali setelah lama = cek pembaruan data
   document.addEventListener('keydown', e => {
-    if (e.key === '/' && state.user && !$('p-dash').hidden && !$('dbody').hidden && !e.target.closest('input,select,textarea,dialog')) { e.preventDefault(); $('dq').focus(); }
+    if (e.key === '/' && state.user && !$('p-dashboard').hidden && state.dashboardPage === 'dash' && !$('dbody').hidden && !e.target.closest('input,select,textarea,dialog')) { e.preventDefault(); $('dq').focus(); }
   });
   document.addEventListener('visibilitychange', () => {
     // Begitu aplikasi kembali aktif, periksa versi/ruang lingkup di server tanpa menunggu interval.
     // loadDash memakai ver yang sedang dimiliki: jika sama, server hanya mengirim respons kecil (same:true).
-    if (!document.hidden && state.user && !state.loading) {
-      loadDash({ automatic: true });
+    if (!document.hidden && state.user) {
+      if (!$('p-dashboard').hidden && state.dashboardPage === 'move') {
+        if (!state.rekeningLoading) loadRekeningBergerak({ automatic: true });
+      } else if (state.data && !state.loading) loadDash({ automatic: true });
     }
   });
 }
