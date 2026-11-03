@@ -275,7 +275,7 @@ const state = {
   wilayah: null, wilayahSelected: '', wilayahDraft: [], wilayahDrafts: Object.create(null), wilayahLoading: false, wilayahLoadedAt: 0,
   rekening: null, rekeningLoading: false, rekeningLoadedAt: 0, dashboardPage: 'move',
   progress: null, progressLoading: false, progressLoadedAt: 0,
-  analisaCabang: null, analisaLoading: false, analisaLoadedAt: 0, analisaFilters: { branch: '*', year: '*', month: '*', period: '', compare: '' },
+  analisaCabang: null, analisaLoading: false, analisaLoadedAt: 0, analisaFilters: { branch: '*', period: '', compare: '' },
   rbView: 'branch', rbSearch: { branch: '', coordinator: '' },
   rbSort: { branch: { key: 'name', dir: 1 }, coordinator: { key: 'name', dir: 1 } },
 };
@@ -289,7 +289,7 @@ function showView(name, msg) {
 function showErr(msg) { $('err').hidden = !msg; $('err').textContent = msg || ''; }
 
 const canSetting = u => !!u && (u.tingkat === 'ADMINISTRATOR' || u.tingkat === 'USER 0');   // menu Setting
-const TABS = ['dashboard', 'set', 'up'];
+const TABS = ['dashboard', 'set', 'up', 'versions'];
 function selectDashboardPage(which) {
   if (which !== 'move' && which !== 'dash' && which !== 'sum' && which !== 'progress' && which !== 'analisa') which = 'move';
   state.dashboardPage = which;
@@ -334,6 +334,8 @@ function paintUser(user) {
   $('t-set').hidden = !canSetting(user);
   if (!canSetting(user) && !$('p-set').hidden) selectTab('dashboard');
   $('t-up').hidden = user.tingkat !== 'ADMINISTRATOR';   // hanya tampilan; penegakan sebenarnya di server
+  const mainNav = document.querySelector('#app>.tabs');
+  if (mainNav) mainNav.style.setProperty('--nav-count', String(TABS.filter(k => !$('t-' + k).hidden).length));
 }
 
 // Dialog konfirmasi bawaan browser (<dialog>), pengganti confirm().
@@ -451,7 +453,7 @@ function enterApp(user) {
   state.rekening = null; state.rekeningLoadedAt = 0;
   state.progress = null; state.progressLoadedAt = 0; state.progressLoading = false;
   state.analisaCabang = null; state.analisaLoadedAt = 0; state.analisaLoading = false;
-  state.analisaFilters = { branch: '*', year: '*', month: '*', period: '', compare: '' };
+  state.analisaFilters = { branch: '*', period: '', compare: '' };
   state.dashboardPage = 'move';
   state.rbSearch = { branch: '', coordinator: '' };
   state.rbSort = { branch: { key: 'name', dir: 1 }, coordinator: { key: 'name', dir: 1 } };
@@ -1986,6 +1988,13 @@ function analisaLabelDate(iso) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
   return m ? Number(m[3]) + ' ' + AN_MONTHS[Number(m[2]) - 1] + ' ' + m[1] : iso || '—';
 }
+// Label khusus dropdown agar tanggal ringkas dan konsisten: yyyy mmm dd.
+// Contoh: 2025 Nov 01, 2026 Okt 31. Nilai option tetap ISO yyyy-MM-dd.
+const AN_MONTHS_SHORT = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+function analisaDropdownDateLabel(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+  return m ? m[1] + ' ' + AN_MONTHS_SHORT[Number(m[2]) - 1] + ' ' + m[3] : iso || '—';
+}
 // Arah perbandingan wajib dari periode yang lebih lama menuju periode terpilih yang lebih baru.
 // Kunci periode memakai ISO yyyy-MM-dd sehingga perbandingan string bersifat kronologis.
 function analisaIsEarlierPeriod(comparePeriod, selectedPeriod) {
@@ -2010,15 +2019,14 @@ function analisaRowsFor(period) {
 function analisaUpdatePeriodOptions(keepPeriod) {
   const d = state.analisaCabang, f = state.analisaFilters;
   if (!d) return;
-  const filtered = (d.periods || []).filter(p => {
-    const y = p.slice(0, 4), m = String(Number(p.slice(5, 7)));
-    const branchHasPeriod = f.branch === '*' || d.records.some(r => r.period === p && r.key === f.branch);
-    return branchHasPeriod && (f.year === '*' || f.year === y) && (f.month === '*' || f.month === m);
-  });
+  // Tanpa filter tahun/bulan: tampilkan seluruh tanggal yang tersedia pada cakupan cabang terpilih.
+  const filtered = (d.periods || []).filter(p =>
+    f.branch === '*' || d.records.some(r => r.period === p && r.key === f.branch)
+  );
   const period = keepPeriod && filtered.includes(f.period) ? f.period : (filtered[0] || '');
   f.period = period;
-  const options = [h('option', { value: '', text: filtered.length ? 'Pilih periode' : 'Tidak ada periode' })]
-    .concat(filtered.map(p => h('option', { value: p, text: analisaLabelDate(p) })));
+  const options = [h('option', { value: '', text: filtered.length ? 'Pilih tanggal analisa' : 'Tidak ada tanggal analisa' })]
+    .concat(filtered.map(p => h('option', { value: p, text: analisaDropdownDateLabel(p) })));
   $('an-period').replaceChildren(...options); $('an-period').value = period;
   analisaUpdateCompareOptions();
 }
@@ -2031,7 +2039,7 @@ function analisaUpdateCompareOptions() {
   const options = comparable.length
     ? [h('option', { value: '', text: 'Tidak dibandingkan' })]
     : [h('option', { value: '', text: f.period ? 'Tidak ada tanggal yang lebih lama' : 'Pilih periode analisa dahulu' })];
-  comparable.forEach(p => options.push(h('option', { value: p, text: analisaLabelDate(p) })));
+  comparable.forEach(p => options.push(h('option', { value: p, text: analisaDropdownDateLabel(p) })));
   $('an-compare').replaceChildren(...options);
   $('an-compare').disabled = !f.period || !comparable.length;
   // Default pembanding = tanggal terdekat yang lebih lama pada cabang/cakupan yang sama.
@@ -2041,41 +2049,62 @@ function analisaUpdateCompareOptions() {
 }
 function analisaInitFilters(data) {
   const f = state.analisaFilters;
-  const years = [...new Set((data.periods || []).map(p => p.slice(0, 4)))].sort().reverse();
   const branches = data.branches || [];
   const branchCurrent = branches.some(b => b.toLocaleUpperCase('id-ID') === f.branch) ? f.branch : '*';
   f.branch = branchCurrent;
   $('an-branch').replaceChildren(h('option', { value: '*', text: 'Semua Cabang' }), ...branches.map(b => h('option', { value: b.toLocaleUpperCase('id-ID'), text: b })));
   $('an-branch').value = f.branch;
-  $('an-year').replaceChildren(h('option', { value: '*', text: 'Semua Tahun' }), ...years.map(y => h('option', { value: y, text: y })));
-  if (f.year !== '*' && !years.includes(f.year)) f.year = '*';
-  $('an-year').value = f.year;
-  $('an-month').replaceChildren(h('option', { value: '*', text: 'Semua Bulan' }), ...AN_MONTHS.map((m, i) => h('option', { value: String(i + 1), text: m })));
-  $('an-month').value = f.month;
   analisaUpdatePeriodOptions(true);
 }
-function analisaRenderCards(current, compare, comparePeriod) {
+function analisaFormatDelta(metric, delta) {
+  const sign = delta > 0 ? '+' : delta < 0 ? '−' : '';
+  const absolute = Math.abs(delta);
+  return sign + (metric.kind === 'money' ? rpShort(absolute) : fmt(absolute));
+}
+function analisaRenderCards(current, compare, currentPeriod, comparePeriod) {
   const host = $('an-kpis');
   put(host, ANALISA_METRICS.map(metric => {
-    const value = current[metric.key] || 0, base = compare ? (compare[metric.key] || 0) : null;
-    let changeText = 'Belum dibandingkan', changeClass = 'neutral', title = '';
-    if (base !== null) {
-      if (base === 0 && value === 0) { changeText = '0,0% · tetap'; }
-      else if (base === 0) { changeText = 'Baru · dasar 0'; changeClass = 'up'; }
-      else {
-        const pct = (value - base) / Math.abs(base) * 100;
+    const value = current[metric.key] || 0;
+    const hasCompare = !!compare && !!comparePeriod;
+    const base = hasCompare ? (compare[metric.key] || 0) : null;
+    const delta = hasCompare ? value - base : null;
+    let changeText = '—', changeClass = 'neutral', pctText = 'Belum dibandingkan';
+    if (hasCompare) {
+      if (base === 0) {
+        pctText = value === 0 ? '0,0% · tetap' : 'N/A · dasar 0';
+        changeText = value === 0 ? '0' : analisaFormatDelta(metric, delta);
+        changeClass = value > 0 ? 'up' : 'neutral';
+      } else {
+        const pct = delta / Math.abs(base) * 100;
         const sign = pct > 0 ? '+' : '';
-        changeText = sign + nf1.format(pct) + '% · ' + (pct > 0 ? 'naik' : pct < 0 ? 'turun' : 'tetap');
+        pctText = sign + nf1.format(pct) + '% · ' + (pct > 0 ? 'naik' : pct < 0 ? 'turun' : 'tetap');
+        changeText = analisaFormatDelta(metric, delta);
         changeClass = pct > 0 ? 'up' : pct < 0 ? 'down' : 'neutral';
       }
-      title = 'Periode pembanding ' + analisaLabelDate(comparePeriod) + ': ' + analisaFormatMetric(metric, base);
     }
-    return h('article', { class: 'an-kpi-card' },
+    const card = h('article', { class: 'an-kpi-card' },
       h('span', { class: 'an-kpi-label', text: metric.label }),
-      h('strong', { class: 'an-kpi-value', text: analisaFormatMetric(metric, value), title: metric.kind === 'money' ? rp(value) : fmt(value) }),
-      h('span', { class: 'an-kpi-hint', text: metric.hint }),
-      h('div', { class: 'an-change ' + changeClass, title }, h('b', { text: changeText }),
-        h('small', { text: comparePeriod ? 'vs ' + analisaLabelDate(comparePeriod) : 'Pilih tanggal pembanding' })));
+      h('div', { class: 'an-kpi-period an-kpi-current' },
+        h('small', { text: 'Periode terbaru · ' + (currentPeriod ? analisaLabelDate(currentPeriod) : '—') }),
+        h('strong', { class: 'an-kpi-value', text: analisaFormatMetric(metric, value), title: metric.kind === 'money' ? rp(value) : fmt(value) })),
+      h('span', { class: 'an-kpi-hint', text: metric.hint }));
+
+    if (hasCompare) {
+      card.append(
+        h('div', { class: 'an-kpi-baseline' },
+          h('small', { text: 'Periode pembanding · ' + analisaLabelDate(comparePeriod) }),
+          h('strong', { text: analisaFormatMetric(metric, base), title: metric.kind === 'money' ? rp(base) : fmt(base) })),
+        h('div', { class: 'an-kpi-delta ' + changeClass },
+          h('div', { class: 'an-kpi-delta-item' },
+            h('small', { text: 'Perubahan nilai' }),
+            h('b', { text: changeText, title: metric.kind === 'money' ? rp(delta) : fmt(delta) })),
+          h('div', { class: 'an-kpi-delta-item' },
+            h('small', { text: 'Persentase perubahan' }),
+            h('b', { text: pctText }))));
+    } else {
+      card.append(h('div', { class: 'an-kpi-no-compare', text: 'Pilih tanggal pembanding yang lebih lama untuk melihat nilai awal, selisih, dan persentase perubahan.' }));
+    }
+    return card;
   }));
 }
 function analisaRenderTable(rows) {
@@ -2124,7 +2153,7 @@ function analisaRenderDashboard() {
   const period = f.period;
   const curRows = analisaRowsFor(period), compareRows = analisaRowsFor(f.compare);
   const current = analisaAggregate(curRows), compare = f.compare ? analisaAggregate(compareRows) : null;
-  analisaRenderCards(current, compare, f.compare);
+  analisaRenderCards(current, compare, period, f.compare);
   analisaRenderTable(curRows);
   $('an-table-caption').textContent = (f.branch === '*' ? 'Seluruh cabang dalam cakupan akses' : 'Cabang: ' + ($('an-branch').selectedOptions[0] ? $('an-branch').selectedOptions[0].textContent : f.branch))
     + ' · Periode ' + (period ? analisaLabelDate(period) : 'belum dipilih')
@@ -2193,7 +2222,7 @@ async function exportAnalisaCabang() {
     const detailRows = currentRows.map(r => [r.branch,r.member,r.outstanding,r.disbursement,r.saving,r.repayment,r.margin,r.memberPAR,r.outstandingPAR]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, analisaExportSheet('RINGKASAN ANALISA CABANG','Periode '+analisaLabelDate(f.period)+' · Pembanding '+(comparePeriod?analisaLabelDate(comparePeriod):'tidak dipilih')+' · '+d.scope,
-      ['Indikator','Periode Terpilih','Periode Pembanding','Selisih','Perubahan (%)'], summaryRows,[28,22,22,22,18],[1,2,3,4]), 'Ringkasan');
+      ['Indikator','Periode Pembanding','Periode Terpilih','Perubahan Nilai','Perubahan (%)'], summaryRows.map(row => [row[0], row[2], row[1], row[3], row[4]]),[28,22,22,22,18],[1,2,3,4]), 'Ringkasan');
     XLSX.utils.book_append_sheet(wb, analisaExportSheet('RINCIAN ANALISA PER CABANG','Periode '+analisaLabelDate(f.period)+' · '+d.scope,
       ['Nama Cabang','Member','Outstanding','Disbursement','Saving','Repayment','Margin','Member PAR','Outstanding PAR'], detailRows,[34,15,20,20,20,20,20,15,22],[1,2,3,4,5,6,8]), 'Per Cabang');
     XLSX.utils.book_append_sheet(wb, analisaExportSheet('PETUNJUK','Sumber: sheet Analisa. Persentase perubahan = (Periode Terpilih - Periode Pembanding) / nilai absolut Periode Pembanding × 100%.',
@@ -2423,6 +2452,17 @@ function bind() {
   // Tab (dengan panah kiri/kanan)
   TABS.forEach(k => { $('t-' + k).onclick = () => selectTab(k); });
   document.querySelectorAll('[data-dashpage]').forEach(b => b.addEventListener('click', () => selectDashboardPage(b.dataset.dashpage)));
+  const versionSearch = $('version-q');
+  if (versionSearch) versionSearch.addEventListener('input', () => {
+    const q = versionSearch.value.trim().toLocaleLowerCase('id');
+    let visible = 0;
+    document.querySelectorAll('#version-list .version-item').forEach(item => {
+      const match = !q || item.textContent.toLocaleLowerCase('id').includes(q);
+      item.hidden = !match;
+      if (match) visible++;
+    });
+    $('version-empty').hidden = visible !== 0;
+  });
   $('app').querySelector('.tabs').addEventListener('keydown', e => {
     const vis = TABS.filter(k => !$('t-' + k).hidden), i = vis.findIndex(k => $('t-' + k).getAttribute('aria-selected') === 'true');
     const to = e.key === 'ArrowRight' ? vis[(i + 1) % vis.length] : e.key === 'ArrowLeft' ? vis[(i - 1 + vis.length) % vis.length]
@@ -2460,8 +2500,6 @@ function bind() {
   $('an-refresh').onclick = () => loadAnalisaCabang();
   $('an-export').onclick = exportAnalisaCabang;
   $('an-branch').onchange = () => { state.analisaFilters.branch = $('an-branch').value; analisaUpdatePeriodOptions(false); analisaRenderDashboard(); };
-  $('an-year').onchange = () => { state.analisaFilters.year = $('an-year').value; analisaUpdatePeriodOptions(false); analisaRenderDashboard(); };
-  $('an-month').onchange = () => { state.analisaFilters.month = $('an-month').value; analisaUpdatePeriodOptions(false); analisaRenderDashboard(); };
   $('an-period').onchange = () => { state.analisaFilters.period = $('an-period').value; state.analisaFilters.compare = ''; analisaUpdateCompareOptions(); analisaRenderDashboard(); };
   $('an-compare').onchange = () => {
     const selected = $('an-compare').value, current = state.analisaFilters.period;
