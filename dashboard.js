@@ -275,6 +275,7 @@ const state = {
   wilayah: null, wilayahSelected: '', wilayahDraft: [], wilayahDrafts: Object.create(null), wilayahLoading: false, wilayahLoadedAt: 0,
   rekening: null, rekeningLoading: false, rekeningLoadedAt: 0, dashboardPage: 'move',
   progress: null, progressLoading: false, progressLoadedAt: 0,
+  analisaCabang: null, analisaLoading: false, analisaLoadedAt: 0, analisaFilters: { branch: '*', year: '*', month: '*', period: '', compare: '' },
   rbView: 'branch', rbSearch: { branch: '', coordinator: '' },
   rbSort: { branch: { key: 'name', dir: 1 }, coordinator: { key: 'name', dir: 1 } },
 };
@@ -290,12 +291,13 @@ function showErr(msg) { $('err').hidden = !msg; $('err').textContent = msg || ''
 const canSetting = u => !!u && (u.tingkat === 'ADMINISTRATOR' || u.tingkat === 'USER 0');   // menu Setting
 const TABS = ['dashboard', 'set', 'up'];
 function selectDashboardPage(which) {
-  if (which !== 'move' && which !== 'dash' && which !== 'sum' && which !== 'progress') which = 'move';
+  if (which !== 'move' && which !== 'dash' && which !== 'sum' && which !== 'progress' && which !== 'analisa') which = 'move';
   state.dashboardPage = which;
   $('p-move').hidden = which !== 'move';
   $('p-dash').hidden = which !== 'dash';
   $('p-sum').hidden = which !== 'sum';
   $('p-progress').hidden = which !== 'progress';
+  $('p-analisa').hidden = which !== 'analisa';
   document.querySelectorAll('[data-dashpage]').forEach(b =>
     b.setAttribute('aria-pressed', String(b.dataset.dashpage === which)));
   if (which === 'move' && state.user && !state.rekeningLoading
@@ -308,6 +310,8 @@ function selectDashboardPage(which) {
   }
   if (which === 'progress' && state.user && !state.progressLoading
       && (!state.progress || Date.now() - state.progressLoadedAt > AUTO_SYNC_MS)) loadProgresHarian();
+  if (which === 'analisa' && state.user && !state.analisaLoading
+      && (!state.analisaCabang || Date.now() - state.analisaLoadedAt > AUTO_SYNC_MS)) loadAnalisaCabang();
 }
 function selectTab(which, focus) {
   if (which === 'up' && (!state.user || state.user.tingkat !== 'ADMINISTRATOR')) which = 'dashboard';
@@ -387,6 +391,8 @@ function startAutoSync() {
       if (!state.rekeningLoading) loadRekeningBergerak({ automatic: true });
     } else if (!$('p-dashboard').hidden && state.dashboardPage === 'progress') {
       if (!state.progressLoading) loadProgresHarian({ automatic: true });
+    } else if (!$('p-dashboard').hidden && state.dashboardPage === 'analisa') {
+      if (!state.analisaLoading) loadAnalisaCabang({ automatic: true });
     } else if (state.data && !state.loading) loadDash({ automatic: true });
   };
   // Jarak pemeriksaan tetap 2 menit; waktu pemeriksaan pertama disebar acak 0–20 detik
@@ -407,6 +413,7 @@ function logout(msg, forceRefresh) {
   state.wilayah = null; state.wilayahDraft = []; state.wilayahDrafts = Object.create(null); state.wilayahSelected = ''; setNote('wjmsg', '');
   state.rekening = null; state.rekeningLoadedAt = 0; state.rekeningLoading = false;
   state.progress = null; state.progressLoadedAt = 0; state.progressLoading = false;
+  state.analisaCabang = null; state.analisaLoadedAt = 0; state.analisaLoading = false;
   clearDash(); resetUpload();
   showView('login', msg || '');
   // Hanya logout otomatis karena batas sinkron yang memaksa refresh penuh.
@@ -443,6 +450,8 @@ function enterApp(user) {
   resetUpload(); setNote('setmsg', ''); setNote('wjmsg', ''); setNote('rb-setting-msg', ''); state.wjDirty = false;
   state.rekening = null; state.rekeningLoadedAt = 0;
   state.progress = null; state.progressLoadedAt = 0; state.progressLoading = false;
+  state.analisaCabang = null; state.analisaLoadedAt = 0; state.analisaLoading = false;
+  state.analisaFilters = { branch: '*', year: '*', month: '*', period: '', compare: '' };
   state.dashboardPage = 'move';
   state.rbSearch = { branch: '', coordinator: '' };
   state.rbSort = { branch: { key: 'name', dir: 1 }, coordinator: { key: 'name', dir: 1 } };
@@ -909,11 +918,80 @@ function loadXLSX() {
   }));
 }
 
+function parseUploadFilename(filename) {
+  const name = String(filename || '').trim();
+  if (!/\.(xlsx|xls)$/i.test(name)) throw new Error('File wajib berformat Excel .xls atau .xlsx. File .xlsm tidak diterima.');
+  const base = name.replace(/\.(xlsx|xls)$/i, '').trim();
+  const hasAnalisa = /(?:^|[^A-Z0-9])ANALISA(?=[^A-Z0-9])/i.test(base);
+  const hasPar = /(?:^|[^A-Z0-9])PAR(?=[^A-Z0-9])/i.test(base);
+  if (hasAnalisa && hasPar) throw new Error('Nama file tidak boleh memuat kata Analisa dan PAR sekaligus. Gunakan satu jenis proses per file.');
+  const re = hasAnalisa ? /(?:^|[^A-Z0-9])ANALISA(?=[^A-Z0-9]).*?(\d{2}-\d{2}-\d{4})$/i
+    : /(?:^|[^A-Z0-9])PAR(?=[^A-Z0-9]).*?(\d{2}-\d{2}-\d{4})$/i;
+  let m = re.exec(base);
+  const type = hasAnalisa ? 'ANALISA' : 'PAR';
+  if (!m) throw new Error('Nama file harus mengikuti salah satu pola: "Analisa dd-mm-yyyy.xlsx" atau "PAR [nama opsional] dd-mm-yyyy.xlsx".');
+  const parts = m[1].split('-').map(Number), d = new Date(Date.UTC(parts[2], parts[1] - 1, parts[0]));
+  if (d.getUTCFullYear() !== parts[2] || d.getUTCMonth() !== parts[1] - 1 || d.getUTCDate() !== parts[0]) throw new Error('Tanggal pada nama file tidak valid. Gunakan dd-mm-yyyy.');
+  return { type, periodText: m[1], period: parts[2] + '-' + pad(parts[1]) + '-' + pad(parts[0]) };
+}
+
+async function readAnalisaExcel(file, info) {
+  if (file.size > UP_MAX_MB * 1048576) throw new Error('Ukuran file melebihi ' + UP_MAX_MB + ' MB.');
+  const buf = await file.arrayBuffer(), b = new Uint8Array(buf.slice(0, 4));
+  const zip = b[0] === 0x50 && b[1] === 0x4B, ole = b[0] === 0xD0 && b[1] === 0xCF && b[2] === 0x11 && b[3] === 0xE0;
+  if (!(zip || ole)) throw new Error('Isi file bukan workbook Excel yang valid.');
+  await loadXLSX();
+  const wb = XLSX.read(buf, { type: 'array', dense: true });
+  let ws = null, block = null;
+  const compact = v => String(v == null ? '' : v).toLowerCase().replace(/[^a-z0-9]/g, '');
+  for (const sheetName of wb.SheetNames) {
+    const candidate = wb.Sheets[sheetName];
+    if (!candidate['!ref']) continue;
+    const data = XLSX.utils.sheet_to_json(candidate, { header: 1, range: 'A4:AH22', raw: true, defval: '' });
+    const header = data[0] || [];
+    if (compact(header[5]) === 'name') { ws = candidate; block = data; break; }
+  }
+  if (!ws || !block) throw new Error('Sheet Analisa tidak ditemukan. Header kolom F pada baris 4 harus berisi "Name".');
+  const header = block[0] || [];
+  const checks = [
+    [5, 'F (Name)', x => x === 'name'], [7, 'H (Member)', x => x === 'member'],
+    [24, 'Y (Outs. Loan)', x => x === 'outsloan'], [20, 'U (Disbursement)', x => x === 'disbursement'],
+    [31, 'AF (Tot. Sav. Balance)', x => x === 'totsavbalance'], [21, 'V (Loan Princ. Rep.)', x => x.includes('loan') && (x.includes('princ') || x.includes('principal'))],
+    [22, 'W (Interest Coll.)', x => x.includes('interest') && (x.includes('coll') || x.includes('collect'))],
+    [32, 'AG (Memb. PAR)', x => x === 'membpar'], [33, 'AH (Outs. PAR)', x => x === 'outspar']
+  ];
+  for (const [idx, label, test] of checks) {
+    if (!test(compact(header[idx]))) throw new Error('Header baris 4 pada kolom ' + label + ' tidak sesuai. Kolom terdeteksi: "' + String(header[idx] || '(kosong)') + '".');
+  }
+  const map = [5, 7, 24, 20, 31, 21, 22, 32, 33];
+  const rows = [], seen = new Set(); let skipped = 0, badNumeric = 0;
+  for (let i = 1; i < block.length; i++) { // baris Excel 5 sampai 22
+    const r = block[i] || [];
+    const values = map.map(c => r[c] == null ? '' : r[c]);
+    if (values.every(blank)) { skipped++; continue; }
+    const branch = toTxt(values[0]);
+    if (!branch) throw new Error('Nama Cabang kosong pada baris Excel ' + (i + 4) + '.');
+    const key = branch.replace(/\s+/g, ' ').trim().toLocaleUpperCase('id-ID');
+    if (seen.has(key)) throw new Error('Nama Cabang "' + branch + '" tercantum lebih dari satu kali pada file.');
+    seen.add(key);
+    const numeric = values.slice(1).map((v, j) => {
+      if (blank(v)) return '';
+      const cleaned = typeof v === 'string' ? v.replace(/^Rp\.?/i, '').trim() : v;
+      const n = toNum(cleaned);
+      if (n === '') { badNumeric++; throw new Error('Nilai angka tidak valid pada baris Excel ' + (i + 4) + ', kolom ' + ['H','Y','U','AF','V','W','AG','AH'][j] + '.'); }
+      return n;
+    });
+    rows.push([branch].concat(numeric));
+  }
+  if (!rows.length) throw new Error('Tidak ada data cabang pada baris 5 sampai 22.');
+  return { name: file.name, type: 'ANALISA', period: info.period, periodText: info.periodText, rows, skipped };
+}
+
 async function readExcel(file) {
   if (file.size > UP_MAX_MB * 1048576) throw new Error('Ukuran file melebihi ' + UP_MAX_MB + ' MB.');
   const buf = await file.arrayBuffer(), b = new Uint8Array(buf.slice(0, 4));
   const zip = b[0] === 0x50 && b[1] === 0x4B, ole = b[0] === 0xD0 && b[1] === 0xCF && b[2] === 0x11 && b[3] === 0xE0;
-  if (!/\.(xlsx|xlsm|xls)$/i.test(file.name) || !(zip || ole)) throw new Error('File harus berformat Excel (.xlsx atau .xls).');
+  if (!/\.(xlsx|xls)$/i.test(file.name) || !(zip || ole)) throw new Error('File harus berformat Excel (.xlsx atau .xls).');
   await loadXLSX();
   const wb = XLSX.read(buf, { type: 'array', dense: true });
   let ws = null;
@@ -949,7 +1027,7 @@ function upBar(f) { $('upbar').hidden = f == null; if (f != null) $('upfill').st
 function resetUpload() {
   pending = null; $('upinfo').hidden = true; $('file').value = ''; $('upstats').replaceChildren(); $('uptbl').replaceChildren();
   $('updiff').hidden = true; $('updiffstats').replaceChildren(); $('updiff-new-samples').textContent = 'Tidak ada.'; $('updiff-done-samples').textContent = 'Tidak ada.';
-  $('upgo').textContent = 'Periksa LOAN NO'; $('upgo').disabled = false;
+  $('upgo').textContent = 'Periksa / Simpan Excel'; $('upgo').disabled = false;
   setNote('upmsg', ''); upBar(null);
 }
 
@@ -967,6 +1045,18 @@ function renderPreview(d) {
   $('uptbl').replaceChildren(h('thead', null, head), h('tbody', null, body));
 }
 
+function renderAnalisaPreview(d) {
+  const chip = (text, warn) => h('span', { class: 'st' + (warn ? ' warn' : ''), text });
+  put($('upstats'), chip('FITUR ANALISA'), chip(d.name), chip('Periode: ' + d.periodText), chip(fmt(d.rows.length) + ' cabang terbaca'),
+    d.skipped ? chip(fmt(d.skipped) + ' baris kosong dilewati', true) : null);
+  const labels = ['Nama Cabang', 'Member', 'Outstanding', 'Disbursement', 'Saving', 'Repayment', 'Margin', 'Member PAR', 'Outstanding PAR'];
+  const head = h('tr', null, labels.map((v, i) => h('th', { scope: 'col', class: i ? 'num' : '', text: v })));
+  const body = d.rows.slice(0, 8).map(r => h('tr', null, r.map((v, i) => h('td', { class: i ? 'num' : '', text: i && v !== '' ? fmt(v) : v }))));
+  $('uptbl').replaceChildren(h('thead', null, head), h('tbody', null, body));
+  $('updiff').hidden = true;
+  $('upgo').textContent = 'Simpan ke Sheet Analisa';
+}
+
 function renderUploadCompare(c) {
   const chip = (text, warn) => h('span', { class: 'st' + (warn ? ' warn' : ''), text });
   put($('updiffstats'),
@@ -982,12 +1072,20 @@ function renderUploadCompare(c) {
 
 async function pickFile(file) {
   if (!file) return;
-  resetUpload(); $('upinfo').hidden = false; $('upgo').disabled = true; setNote('upmsg', 'Membaca file…');
+  resetUpload(); $('upinfo').hidden = false; $('upgo').disabled = true; setNote('upmsg', 'Memeriksa nama dan membaca file…');
   await nextFrame();
   try {
-    pending = await readExcel(file);
-    renderPreview(pending);
-    setNote('upmsg', 'Periksa pratinjau, lalu jalankan pemeriksaan LOAN NO. Data_Upload lama belum akan diubah.');
+    const info = parseUploadFilename(file.name);
+    pending = info.type === 'ANALISA' ? await readAnalisaExcel(file, info) : await readExcel(file);
+    if (info.type === 'PAR') pending.type = 'PAR';
+    if (pending.type === 'ANALISA') {
+      renderAnalisaPreview(pending);
+      setNote('upmsg', 'File dikenali sebagai Analisa. Data akan disimpan ke sheet Analisa dan tidak mengubah Data_Upload. Jika periode sama sudah ada, data periode itu akan diperbarui.');
+    } else {
+      renderPreview(pending);
+      $('upgo').textContent = 'Periksa LOAN NO';
+      setNote('upmsg', 'File dikenali sebagai PAR. Periksa pratinjau, lalu jalankan pemeriksaan LOAN NO. Data_Upload lama belum akan diubah.');
+    }
     $('upgo').disabled = false;
   } catch (e) {
     pending = null; $('upstats').replaceChildren(); $('uptbl').replaceChildren();
@@ -1056,8 +1154,26 @@ async function commitUpload() {
   pending = null; $('file').value = ''; $('upgo').disabled = true; loadDash();
 }
 
+async function saveAnalisaUpload() {
+  if (!pending || pending.type !== 'ANALISA' || !Array.isArray(pending.rows)) return;
+  const ok = await askConfirm('Simpan data Analisa?',
+    'File: ' + pending.name + '. Periode Analisa: ' + pending.periodText + '. Cabang terbaca: ' + fmt(pending.rows.length) + '. Jika periode ini sudah ada, seluruh data pada periode tersebut akan diganti dengan isi file terbaru. Periode lain tetap dipertahankan. Data_Upload tidak akan diubah.',
+    'Simpan Analisa');
+  if (!ok) return;
+  $('upgo').disabled = true; upBar(null); setNote('upmsg', 'Memvalidasi dan menyimpan data ke sheet Analisa…');
+  const r = await api('webAnalisaUpload', { token: (session.get() || {}).token, file: pending.name, period: pending.period, rows: JSON.stringify(pending.rows) }, { timeoutMs: 180000 });
+  if (r.code === 'SESSION_REQUIRED') return logout(r.error);
+  if (!r.ok) { $('upgo').disabled = false; return setNote('upmsg', r.error || 'Gagal menyimpan Analisa.', 'bad'); }
+  const message = (r.message || 'Data Analisa berhasil disimpan.') + ' ' + fmt(r.inserted || 0) + ' baris tersimpan; ' + fmt(r.replaced || 0) + ' baris periode lama diperbarui. Data_Upload tidak berubah.';
+  setNote('upmsg', message, 'good'); toast('Data Analisa berhasil disimpan.');
+  pending = null; $('file').value = ''; $('upgo').disabled = true; $('upgo').textContent = 'Pilih file berikutnya';
+  state.analisaCabang = null; state.analisaLoadedAt = 0;
+  if (!$('p-dashboard').hidden && state.dashboardPage === 'analisa') loadAnalisaCabang();
+}
+
 async function sendUpload() {
   if (!pending) return;
+  if (pending.type === 'ANALISA') return saveAnalisaUpload();
   if (pending.checked) return commitUpload();
   return stageAndCheck();
 }
@@ -1851,6 +1967,244 @@ async function exportProgresHarian() {
 }
 
 /* ---------------------------------------------------------------------
+   Dashboard: Analisa Cabang
+   Data telah dibatasi Wilayah_Kerja di server. Filter dan agregasi di sini
+   hanya bekerja pada data yang memang boleh dilihat akun aktif.
+   --------------------------------------------------------------------- */
+const ANALISA_METRICS = [
+  { key: 'member', label: 'Member', kind: 'count', hint: 'Jumlah member' },
+  { key: 'outstanding', label: 'Outstanding', kind: 'money', hint: 'Saldo outstanding' },
+  { key: 'disbursement', label: 'Disbursement', kind: 'money', hint: 'Penyaluran' },
+  { key: 'saving', label: 'Saving', kind: 'money', hint: 'Simpanan' },
+  { key: 'repayment', label: 'Repayment', kind: 'money', hint: 'Pengembalian pokok' },
+  { key: 'margin', label: 'Margin', kind: 'money', hint: 'Interest collection' },
+  { key: 'memberPAR', label: 'Member PAR', kind: 'count', hint: 'Jumlah member PAR' },
+  { key: 'outstandingPAR', label: 'Outstanding PAR', kind: 'money', hint: 'Saldo outstanding PAR' }
+];
+const AN_MONTHS = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+function analisaLabelDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+  return m ? Number(m[3]) + ' ' + AN_MONTHS[Number(m[2]) - 1] + ' ' + m[1] : iso || '—';
+}
+// Arah perbandingan wajib dari periode yang lebih lama menuju periode terpilih yang lebih baru.
+// Kunci periode memakai ISO yyyy-MM-dd sehingga perbandingan string bersifat kronologis.
+function analisaIsEarlierPeriod(comparePeriod, selectedPeriod) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(comparePeriod || '')
+    && /^\d{4}-\d{2}-\d{2}$/.test(selectedPeriod || '')
+    && comparePeriod < selectedPeriod;
+}
+function analisaFormatMetric(metric, value) {
+  return metric.kind === 'money' ? rpShort(value || 0) : fmt(value || 0);
+}
+function analisaAggregate(rows) {
+  const out = {};
+  ANALISA_METRICS.forEach(m => out[m.key] = 0);
+  rows.forEach(r => ANALISA_METRICS.forEach(m => { out[m.key] += Number(r[m.key]) || 0; }));
+  return out;
+}
+function analisaRowsFor(period) {
+  const d = state.analisaCabang, f = state.analisaFilters;
+  if (!d || !period) return [];
+  return d.records.filter(r => r.period === period && (f.branch === '*' || r.key === f.branch));
+}
+function analisaUpdatePeriodOptions(keepPeriod) {
+  const d = state.analisaCabang, f = state.analisaFilters;
+  if (!d) return;
+  const filtered = (d.periods || []).filter(p => {
+    const y = p.slice(0, 4), m = String(Number(p.slice(5, 7)));
+    const branchHasPeriod = f.branch === '*' || d.records.some(r => r.period === p && r.key === f.branch);
+    return branchHasPeriod && (f.year === '*' || f.year === y) && (f.month === '*' || f.month === m);
+  });
+  const period = keepPeriod && filtered.includes(f.period) ? f.period : (filtered[0] || '');
+  f.period = period;
+  const options = [h('option', { value: '', text: filtered.length ? 'Pilih periode' : 'Tidak ada periode' })]
+    .concat(filtered.map(p => h('option', { value: p, text: analisaLabelDate(p) })));
+  $('an-period').replaceChildren(...options); $('an-period').value = period;
+  analisaUpdateCompareOptions();
+}
+function analisaUpdateCompareOptions() {
+  const d = state.analisaCabang, f = state.analisaFilters;
+  // Hanya periode yang benar-benar lebih lama dari Periode Analisa terpilih yang boleh menjadi pembanding.
+  const comparable = d ? (d.periods || []).filter(p => analisaIsEarlierPeriod(p, f.period)
+    && (f.branch === '*' || d.records.some(r => r.period === p && r.key === f.branch)))
+    .sort((a, b) => b.localeCompare(a)) : [];
+  const options = comparable.length
+    ? [h('option', { value: '', text: 'Tidak dibandingkan' })]
+    : [h('option', { value: '', text: f.period ? 'Tidak ada tanggal yang lebih lama' : 'Pilih periode analisa dahulu' })];
+  comparable.forEach(p => options.push(h('option', { value: p, text: analisaLabelDate(p) })));
+  $('an-compare').replaceChildren(...options);
+  $('an-compare').disabled = !f.period || !comparable.length;
+  // Default pembanding = tanggal terdekat yang lebih lama pada cabang/cakupan yang sama.
+  const earlier = comparable[0] || '';
+  if (!analisaIsEarlierPeriod(f.compare, f.period) || !comparable.includes(f.compare)) f.compare = earlier;
+  $('an-compare').value = f.compare;
+}
+function analisaInitFilters(data) {
+  const f = state.analisaFilters;
+  const years = [...new Set((data.periods || []).map(p => p.slice(0, 4)))].sort().reverse();
+  const branches = data.branches || [];
+  const branchCurrent = branches.some(b => b.toLocaleUpperCase('id-ID') === f.branch) ? f.branch : '*';
+  f.branch = branchCurrent;
+  $('an-branch').replaceChildren(h('option', { value: '*', text: 'Semua Cabang' }), ...branches.map(b => h('option', { value: b.toLocaleUpperCase('id-ID'), text: b })));
+  $('an-branch').value = f.branch;
+  $('an-year').replaceChildren(h('option', { value: '*', text: 'Semua Tahun' }), ...years.map(y => h('option', { value: y, text: y })));
+  if (f.year !== '*' && !years.includes(f.year)) f.year = '*';
+  $('an-year').value = f.year;
+  $('an-month').replaceChildren(h('option', { value: '*', text: 'Semua Bulan' }), ...AN_MONTHS.map((m, i) => h('option', { value: String(i + 1), text: m })));
+  $('an-month').value = f.month;
+  analisaUpdatePeriodOptions(true);
+}
+function analisaRenderCards(current, compare, comparePeriod) {
+  const host = $('an-kpis');
+  put(host, ANALISA_METRICS.map(metric => {
+    const value = current[metric.key] || 0, base = compare ? (compare[metric.key] || 0) : null;
+    let changeText = 'Belum dibandingkan', changeClass = 'neutral', title = '';
+    if (base !== null) {
+      if (base === 0 && value === 0) { changeText = '0,0% · tetap'; }
+      else if (base === 0) { changeText = 'Baru · dasar 0'; changeClass = 'up'; }
+      else {
+        const pct = (value - base) / Math.abs(base) * 100;
+        const sign = pct > 0 ? '+' : '';
+        changeText = sign + nf1.format(pct) + '% · ' + (pct > 0 ? 'naik' : pct < 0 ? 'turun' : 'tetap');
+        changeClass = pct > 0 ? 'up' : pct < 0 ? 'down' : 'neutral';
+      }
+      title = 'Periode pembanding ' + analisaLabelDate(comparePeriod) + ': ' + analisaFormatMetric(metric, base);
+    }
+    return h('article', { class: 'an-kpi-card' },
+      h('span', { class: 'an-kpi-label', text: metric.label }),
+      h('strong', { class: 'an-kpi-value', text: analisaFormatMetric(metric, value), title: metric.kind === 'money' ? rp(value) : fmt(value) }),
+      h('span', { class: 'an-kpi-hint', text: metric.hint }),
+      h('div', { class: 'an-change ' + changeClass, title }, h('b', { text: changeText }),
+        h('small', { text: comparePeriod ? 'vs ' + analisaLabelDate(comparePeriod) : 'Pilih tanggal pembanding' })));
+  }));
+}
+function analisaRenderTable(rows) {
+  const headers = ['Nama Cabang','Member','Outstanding','Disbursement','Saving','Repayment','Margin','Member PAR','Outstanding PAR'];
+  const table = $('an-table');
+  const head = h('thead', null, h('tr', null, headers.map((v,i) => h('th', { class: i ? 'num' : '', text: v }))));
+  if (!rows.length) {
+    table.replaceChildren(head, h('tbody', null, h('tr', null, h('td', { colspan: headers.length, class: 'an-empty-cell', text: 'Tidak ada data pada periode dan filter cabang yang dipilih.' }))));
+    return;
+  }
+  rows = rows.slice().sort((a,b) => collator.compare(a.branch,b.branch));
+  const tbody = h('tbody', null, rows.map(r => h('tr', null,
+    h('th', { scope: 'row', text: r.branch }),
+    h('td', { class: 'num', text: fmt(r.member) }),
+    h('td', { class: 'num', text: rp(r.outstanding) }),
+    h('td', { class: 'num', text: rp(r.disbursement) }),
+    h('td', { class: 'num', text: rp(r.saving) }),
+    h('td', { class: 'num', text: rp(r.repayment) }),
+    h('td', { class: 'num', text: rp(r.margin) }),
+    h('td', { class: 'num', text: fmt(r.memberPAR) }),
+    h('td', { class: 'num', text: rp(r.outstandingPAR) }))));
+  const total = analisaAggregate(rows);
+  const foot = h('tfoot', null, h('tr', null,
+    h('th', { text: 'TOTAL · ' + fmt(rows.length) + ' cabang' }),
+    h('td', { class: 'num', text: fmt(total.member) }),
+    h('td', { class: 'num', text: rp(total.outstanding) }),
+    h('td', { class: 'num', text: rp(total.disbursement) }),
+    h('td', { class: 'num', text: rp(total.saving) }),
+    h('td', { class: 'num', text: rp(total.repayment) }),
+    h('td', { class: 'num', text: rp(total.margin) }),
+    h('td', { class: 'num', text: fmt(total.memberPAR) }),
+    h('td', { class: 'num', text: rp(total.outstandingPAR) })));
+  table.replaceChildren(head, tbody, foot);
+}
+function analisaRenderDashboard() {
+  const d = state.analisaCabang, f = state.analisaFilters;
+  if (!d) return;
+  // Pertahanan tambahan: jangan pernah menghitung/menampilkan perbandingan dengan tanggal yang sama atau lebih baru.
+  if (f.compare && !analisaIsEarlierPeriod(f.compare, f.period)) {
+    f.compare = '';
+    analisaUpdateCompareOptions();
+  }
+  $('an-scope').textContent = d.scope || 'Sesuai Wilayah Kerja';
+  $('an-meta').textContent = d.periods && d.periods.length ? 'Data sheet Analisa · ' + d.periods.length + ' periode tersedia · ' + (d.records || []).length + ' baris sesuai cakupan akses.' : (d.message || 'Belum ada data Analisa.');
+  $('an-sync').textContent = d.generatedAt ? 'Terakhir diperiksa: ' + fmtStamp(d.generatedAt) + (d.timezone ? ' · ' + d.timezone : '') : '';
+  const period = f.period;
+  const curRows = analisaRowsFor(period), compareRows = analisaRowsFor(f.compare);
+  const current = analisaAggregate(curRows), compare = f.compare ? analisaAggregate(compareRows) : null;
+  analisaRenderCards(current, compare, f.compare);
+  analisaRenderTable(curRows);
+  $('an-table-caption').textContent = (f.branch === '*' ? 'Seluruh cabang dalam cakupan akses' : 'Cabang: ' + ($('an-branch').selectedOptions[0] ? $('an-branch').selectedOptions[0].textContent : f.branch))
+    + ' · Periode ' + (period ? analisaLabelDate(period) : 'belum dipilih')
+    + (f.compare ? ' · dibandingkan dengan ' + analisaLabelDate(f.compare) : ' · belum ada periode pembanding');
+  const notices = [];
+  if (d.scopeMessage) notices.push(d.scopeMessage);
+  if (d.missingPeriod) notices.push(fmt(d.missingPeriod) + ' baris di sheet Analisa diabaikan karena Periode Analisa kosong/tidak valid.');
+  if (period && !curRows.length) notices.push('Tidak ditemukan data untuk periode ' + analisaLabelDate(period) + '.');
+  $('an-notice').hidden = !notices.length; $('an-notice').textContent = notices.join(' ');
+  $('an-export').disabled = !period || !curRows.length;
+}
+async function loadAnalisaCabang(options) {
+  if (state.analisaLoading || !state.user) return;
+  const automatic = !!(options && options.automatic);
+  state.analisaLoading = true;
+  $('an-refresh').disabled = true; $('an-export').disabled = true;
+  if (!automatic) $('an-sync').textContent = 'Mengambil data dari sheet Analisa…';
+  setNote('an-msg', '');
+  try {
+    if (automatic && !reserveAutoSync()) return;
+    const r = await api('webAnalisaCabang', { token: (session.get() || {}).token }, { retry: true });
+    if (r.code === 'SESSION_REQUIRED') return logout(r.error);
+    if (!r.ok) {
+      state.analisaCabang = null;
+      $('an-notice').hidden = false; $('an-notice').textContent = r.error || 'Gagal mengambil data Analisa.';
+      $('an-meta').textContent = 'Analisa Cabang gagal dimuat.';
+      return;
+    }
+    state.analisaCabang = r; state.analisaLoadedAt = Date.now();
+    analisaInitFilters(r); analisaRenderDashboard();
+    if (automatic) $('an-sync').textContent += ' · sinkron otomatis';
+  } catch (err) {
+    $('an-notice').hidden = false; $('an-notice').textContent = err && err.message ? err.message : 'Jaringan tidak dapat dihubungi.';
+  } finally {
+    state.analisaLoading = false; $('an-refresh').disabled = false;
+    $('an-export').disabled = !state.analisaCabang || !state.analisaFilters.period || !analisaRowsFor(state.analisaFilters.period).length;
+  }
+}
+function analisaExportSheet(title, subtitle, headers, rows, widths, numericCols) {
+  const ws = XLSX.utils.aoa_to_sheet([[title],[subtitle],[],headers].concat(rows));
+  ws['!merges'] = [{ s: { r:0,c:0 }, e:{ r:0,c:headers.length-1 } }, { s:{r:1,c:0},e:{r:1,c:headers.length-1} }];
+  ws['!cols'] = widths.map(w => ({ wch:w })); ws['!freeze'] = { xSplit:0, ySplit:4 };
+  const style = (cell, fill, color, bold, size) => { if (ws[cell]) ws[cell].s = { font:{name:'Aptos',sz:size||10,bold:!!bold,color:{rgb:color||'18352B'}}, fill:{patternType:'solid',fgColor:{rgb:fill}}, alignment:{vertical:'center',wrapText:true}, border:{bottom:{style:'thin',color:{rgb:'D5E5DC'}}} }; };
+  style('A1','064E3B','FFFFFF',true,15); style('A2','F3FAF6','405D50',false,10);
+  headers.forEach((_,c) => style(XLSX.utils.encode_cell({r:3,c}),'0A7A5A','FFFFFF',true,10));
+  rows.forEach((row,i) => row.forEach((v,c) => { const cell = XLSX.utils.encode_cell({r:4+i,c}); if (ws[cell] && numericCols.includes(c)) ws[cell].z = '#,##0.00;[Red](#,##0.00);-'; }));
+  if (rows.length) ws['!autofilter'] = { ref:XLSX.utils.encode_range({s:{r:3,c:0},e:{r:3+rows.length,c:headers.length-1}}) };
+  return ws;
+}
+async function exportAnalisaCabang() {
+  const d = state.analisaCabang, f = state.analisaFilters;
+  if (!d || !f.period) return;
+  const comparePeriod = analisaIsEarlierPeriod(f.compare, f.period) ? f.compare : '';
+  const btn = $('an-export'); btn.disabled = true; setNote('an-msg','Menyiapkan laporan Excel…');
+  try {
+    await Promise.all([loadXLSX(), nextFrame()]);
+    const currentRows = analisaRowsFor(f.period).slice().sort((a,b) => collator.compare(a.branch,b.branch));
+    const compareRows = comparePeriod ? analisaRowsFor(comparePeriod) : [];
+    const cur = analisaAggregate(currentRows), old = comparePeriod ? analisaAggregate(compareRows) : null;
+    const summaryRows = ANALISA_METRICS.map(m => {
+      const now = cur[m.key] || 0, before = old ? old[m.key] || 0 : '';
+      const delta = old ? now - before : '';
+      const pct = old ? (before === 0 ? (now === 0 ? 0 : 'N/A') : (now - before) / Math.abs(before) * 100) : '';
+      return [m.label, now, before, delta, pct];
+    });
+    const detailRows = currentRows.map(r => [r.branch,r.member,r.outstanding,r.disbursement,r.saving,r.repayment,r.margin,r.memberPAR,r.outstandingPAR]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, analisaExportSheet('RINGKASAN ANALISA CABANG','Periode '+analisaLabelDate(f.period)+' · Pembanding '+(comparePeriod?analisaLabelDate(comparePeriod):'tidak dipilih')+' · '+d.scope,
+      ['Indikator','Periode Terpilih','Periode Pembanding','Selisih','Perubahan (%)'], summaryRows,[28,22,22,22,18],[1,2,3,4]), 'Ringkasan');
+    XLSX.utils.book_append_sheet(wb, analisaExportSheet('RINCIAN ANALISA PER CABANG','Periode '+analisaLabelDate(f.period)+' · '+d.scope,
+      ['Nama Cabang','Member','Outstanding','Disbursement','Saving','Repayment','Margin','Member PAR','Outstanding PAR'], detailRows,[34,15,20,20,20,20,20,15,22],[1,2,3,4,5,6,8]), 'Per Cabang');
+    XLSX.utils.book_append_sheet(wb, analisaExportSheet('PETUNJUK','Sumber: sheet Analisa. Persentase perubahan = (Periode Terpilih - Periode Pembanding) / nilai absolut Periode Pembanding × 100%.',
+      ['Istilah','Keterangan'],[['Periode Analisa','Tanggal diambil dari nama file Analisa dd-mm-yyyy.'],['Cabang','Semua Cabang atau satu Nama Cabang.'],['Cakupan','Administrator melihat semua cabang; pengguna lain mengikuti Wilayah_Kerja.'],['Nilai pembanding 0','Perubahan ditampilkan N/A bila nilai periode pembanding nol dan nilai terbaru bukan nol.']],[25,100],[]), 'Petunjuk');
+    XLSX.writeFile(wb, 'Analisa_Cabang_'+f.period+'.xlsx');
+    setNote('an-msg','Laporan Excel berhasil dibuat (3 sheet).','good');
+  } catch (err) { setNote('an-msg',err && err.message ? err.message : 'Gagal membuat laporan Excel.','bad'); }
+  finally { btn.disabled = false; }
+}
+
+/* ---------------------------------------------------------------------
    Setting: Penyesuaian Margin (ADMINISTRATOR dan USER 0; server memeriksa ulang)
    --------------------------------------------------------------------- */
 async function saveMargin() {
@@ -2102,6 +2456,26 @@ function bind() {
   $('ph-refresh').onclick = () => loadProgresHarian();
   $('ph-export').onclick = exportProgresHarian;
 
+  // Dashboard Analisa Cabang
+  $('an-refresh').onclick = () => loadAnalisaCabang();
+  $('an-export').onclick = exportAnalisaCabang;
+  $('an-branch').onchange = () => { state.analisaFilters.branch = $('an-branch').value; analisaUpdatePeriodOptions(false); analisaRenderDashboard(); };
+  $('an-year').onchange = () => { state.analisaFilters.year = $('an-year').value; analisaUpdatePeriodOptions(false); analisaRenderDashboard(); };
+  $('an-month').onchange = () => { state.analisaFilters.month = $('an-month').value; analisaUpdatePeriodOptions(false); analisaRenderDashboard(); };
+  $('an-period').onchange = () => { state.analisaFilters.period = $('an-period').value; state.analisaFilters.compare = ''; analisaUpdateCompareOptions(); analisaRenderDashboard(); };
+  $('an-compare').onchange = () => {
+    const selected = $('an-compare').value, current = state.analisaFilters.period;
+    if (selected && !analisaIsEarlierPeriod(selected, current)) {
+      state.analisaFilters.compare = '';
+      analisaUpdateCompareOptions();
+      setNote('an-msg', 'Tanggal pembanding harus lebih lama daripada Periode Analisa yang dipilih.', 'bad');
+    } else {
+      state.analisaFilters.compare = selected;
+      setNote('an-msg', '');
+    }
+    analisaRenderDashboard();
+  };
+
   // Dashboard Tool PAR (dashboard lama)
   $('dref').onclick = () => loadDash();
   $('ddl').onclick = exportAll;
@@ -2173,6 +2547,8 @@ function bind() {
         if (!state.rekeningLoading) loadRekeningBergerak({ automatic: true });
       } else if (!$('p-dashboard').hidden && state.dashboardPage === 'progress') {
         if (!state.progressLoading) loadProgresHarian({ automatic: true });
+      } else if (!$('p-dashboard').hidden && state.dashboardPage === 'analisa') {
+        if (!state.analisaLoading) loadAnalisaCabang({ automatic: true });
       } else if (state.data && !state.loading) loadDash({ automatic: true });
     }
   });

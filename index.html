@@ -89,6 +89,7 @@
       <nav class="setnav" aria-label="Sub menu Dashboard">
         <button type="button" class="setnav-btn" data-dashpage="sum" aria-pressed="false">Ringkasan</button>
         <button type="button" class="setnav-btn" data-dashpage="progress" aria-pressed="false">Progres Harian</button>
+        <button type="button" class="setnav-btn" data-dashpage="analisa" aria-pressed="false">Analisa Cabang</button>
         <button type="button" class="setnav-btn" data-dashpage="move" aria-pressed="true">Rekening Bergerak</button>
         <button type="button" class="setnav-btn" data-dashpage="dash" aria-pressed="false">Tool PAR</button>
       </nav>
@@ -303,6 +304,41 @@
         </section>
         <p id="ph-msg" class="note" role="status"></p>
       </div>
+
+      <!-- Dashboard Analisa Cabang -->
+      <div id="p-analisa" class="set-page" role="tabpanel" aria-labelledby="t-dashboard" hidden>
+        <div class="dhead page-heading">
+          <div>
+            <div class="eyebrow"><span class="eyebrow-dot"></span> ANALISIS KINERJA CABANG</div>
+            <h1 class="ph">Analisa Cabang</h1>
+            <p class="lead" id="an-meta">Pilih periode analisa untuk melihat perkembangan seluruh indikator.</p>
+            <p class="sync" id="an-sync" role="status"></p>
+          </div>
+          <div class="dact">
+            <button class="btn ghost" id="an-refresh" type="button">↻ Muat ulang</button>
+            <button class="btn fit" id="an-export" type="button" disabled>↓ Unduh Excel</button>
+          </div>
+        </div>
+        <section class="an-filter-panel" aria-label="Filter Analisa Cabang">
+          <label>Cabang<select id="an-branch"><option value="*">Semua Cabang</option></select></label>
+          <label>Tahun<select id="an-year"><option value="*">Semua Tahun</option></select></label>
+          <label>Bulan<select id="an-month"><option value="*">Semua Bulan</option></select></label>
+          <label>Periode Analisa<select id="an-period"><option value="">Pilih periode</option></select></label>
+          <label>Bandingkan dengan (tanggal lebih lama)<select id="an-compare"><option value="">Pilih periode analisa dahulu</option></select></label>
+        </section>
+        <div id="an-notice" class="an-notice" role="status" hidden></div>
+        <section id="an-kpis" class="an-kpi-grid" aria-label="Kartu indikator Analisa Cabang">
+          <div class="an-empty">Pilih periode setelah data selesai dimuat.</div>
+        </section>
+        <section class="an-panel">
+          <div class="an-panel-head">
+            <div><span class="eyebrow">RINCIAN PER CABANG</span><h2>Seluruh indikator pada periode terpilih</h2><p id="an-table-caption">Data mengikuti cakupan Wilayah Kerja akun Anda.</p></div>
+            <span class="an-scope" id="an-scope">Sesuai Wilayah Kerja</span>
+          </div>
+          <div class="tw an-table-wrap"><table id="an-table" class="an-table"></table></div>
+        </section>
+        <p id="an-msg" class="note" role="status"></p>
+      </div>
     </div>
 
     <!-- Setting (ADMINISTRATOR dan USER 0) -->
@@ -386,12 +422,12 @@
     <!-- Unggah Excel (ADMINISTRATOR) -->
     <div id="p-up" role="tabpanel" aria-labelledby="t-up" hidden>
       <h1 class="ph">Unggah Excel</h1>
-      <p class="lead">File wajib Excel (.xlsx / .xls), data dibaca mulai baris 5. Pemeriksaan Loan No dilakukan terlebih dahulu; <b>Data_Upload</b> baru diganti setelah Anda mengonfirmasi hasilnya.</p>
+      <p class="lead">Satu pintu untuk dua proses: gunakan nama <b>PAR 30-10-2026.xlsx</b> atau <b>Analisa 30-10-2026.xlsx</b> (tanggal wajib dd-mm-yyyy). PAR menjalankan pemeriksaan Loan No dan pembaruan Data_Upload; Analisa menyimpan data ke sheet Analisa tanpa mengubah Data_Upload.</p>
       <label class="drop" id="drop" for="file">
         <b>Pilih file Excel</b>
-        <span>atau seret file ke sini</span>
+        <span>atau seret file ke sini · .xls / .xlsx</span>
       </label>
-      <input id="file" type="file" accept=".xlsx,.xlsm,.xls" hidden>
+      <input id="file" type="file" accept=".xlsx,.xls" hidden>
       <div id="upinfo" hidden>
         <div class="stats" id="upstats"></div>
         <div class="tw"><table id="uptbl"></table></div>
