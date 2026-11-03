@@ -93,6 +93,8 @@ input[type=search]{-webkit-appearance:none;appearance:none}
 .eye{position:absolute;right:6px;bottom:6px;height:36px;padding:0 10px;border:0;background:none;color:var(--em);font-size:13px;font-weight:600;cursor:pointer}
 .hint{color:var(--mute);font-size:12.5px;margin-top:14px;text-align:center}
 #go{height:50px;width:100%}
+#password-change .field input[type=password]{padding-right:14px}
+#password-change .card .sub{line-height:1.6}
 
 /* ---------- 5. Rangka aplikasi ---------- */
 .top{display:flex;align-items:center;gap:16px;padding:12px 28px;background:#fff;border-top:4px solid var(--em);flex-wrap:wrap}

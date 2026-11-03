@@ -12,7 +12,8 @@
    1. Konfigurasi
    --------------------------------------------------------------------- */
 const API_URL = 'https://script.google.com/macros/s/AKfycbz3mpy9zQunopiYQglyn2ct9SgPbOviPQCR0Z1uGE_MjcDnic3sTcsx7bcNyITnR76LcA/exec';
-const SESSION_KEY = 'dash_sesi_v1';
+const SESSION_KEY = 'dash_sesi_v2'; // v2: sesi lama diinvalidasi satu kali untuk menerapkan alur ganti password awal.
+const LEGACY_SESSION_KEY = 'dash_sesi_v1';
 const CACHE_DB = 'dash_cache_v3';   // v3: susunan kolom balasan berubah (sisa & angsuran dihitung di halaman, per kategori)
 const CACHE_DB_OLD = 'dash_cache_v2';   // salinan versi lama: dihapus saat halaman dibuka
 const API_TIMEOUT_MS = 60000;
@@ -156,6 +157,7 @@ const put = (el, ...kids) => el.replaceChildren(...kids.flat().filter(c => c != 
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 
 let toastTimer;
+let initialPasswordChangeTicket = ''; // hanya disimpan di memori selama halaman ganti password terbuka.
 function toast(text, bad) {
   const t = $('toast');
   t.textContent = text; t.className = 'toast' + (bad ? ' bad' : ''); t.hidden = false;
@@ -283,8 +285,10 @@ const state = {
 function showView(name, msg) {
   $('splash').hidden = name !== 'splash';
   $('login').hidden = name !== 'login';
+  $('password-change').hidden = name !== 'password-change';
   $('app').hidden = name !== 'app';
   if (name === 'login') { showErr(msg); $(msg ? 'pw' : 'nik').focus(); }
+  if (name === 'password-change') { showPasswordChangeErr(msg || ''); $('force-new-password').focus(); }
 }
 function showErr(msg) { $('err').hidden = !msg; $('err').textContent = msg || ''; }
 
@@ -409,6 +413,7 @@ function startAutoSync() {
 
 function logout(msg, forceRefresh) {
   stopAutoSync();
+  initialPasswordChangeTicket = '';
   state.loadSeq++; state.loading = false; state.user = null; state.sessionToken = ''; state.data = null; state.byCat = {}; state.groups = {}; state.clientIdCounts = new Map(); state.wjDirty = false;
   session.clear();
   const cacheClear = cache.clear();
@@ -436,9 +441,73 @@ async function submitLogin(ev) {
   go.disabled = false;
   go.replaceChildren(h('span', { id: 'gotxt', text: 'Masuk' }));
   if (!r.ok) return showErr(r.error || 'Login gagal.');
+
+  // Akun dengan password awal hanya menerima tiket terbatas; belum memiliki sesi Dashboard.
+  if (r.mustChangePassword === true) {
+    if (!r.changeToken) return showErr('Server tidak memberikan sesi penggantian password. Hubungi Administrator.');
+    initialPasswordChangeTicket = r.changeToken;
+    $('pw').value = '';
+    $('force-new-password').value = '';
+    $('force-confirm-password').value = '';
+    showPasswordChangeErr('');
+    showView('password-change');
+    return;
+  }
+
+  if (!r.token || !r.user) return showErr('Balasan login tidak lengkap. Silakan coba kembali.');
   session.set({ token: r.token, expires: r.expires, user: r.user, autoSyncCount: 0 });
   $('pw').value = '';
   enterApp(r.user);
+}
+
+function showPasswordChangeErr(msg) {
+  const el = $('force-password-err');
+  if (!el) return;
+  el.hidden = !msg;
+  el.textContent = msg || '';
+}
+
+async function submitInitialPasswordChange(ev) {
+  ev.preventDefault();
+  const newPass = $('force-new-password').value;
+  const confirmPass = $('force-confirm-password').value;
+  $('force-new-password').classList.toggle('bad', !newPass || newPass.length < 8);
+  $('force-confirm-password').classList.toggle('bad', !confirmPass || newPass !== confirmPass);
+  if (!initialPasswordChangeTicket) {
+    showView('login', 'Sesi penggantian password tidak tersedia. Silakan login kembali.');
+    return;
+  }
+  if (newPass.length < 8) return showPasswordChangeErr('Password baru minimal 8 karakter.');
+  if (newPass.length > 200) return showPasswordChangeErr('Password baru maksimal 200 karakter.');
+  if (!confirmPass || newPass !== confirmPass) return showPasswordChangeErr('Konfirmasi password baru tidak sama.');
+
+  showPasswordChangeErr('');
+  const btn = $('force-password-go');
+  btn.disabled = true;
+  btn.replaceChildren(h('span', { class: 'spin' }), h('span', { text: 'Menyimpan…' }));
+  const r = await api('webChangeInitialPassword', {
+    changeToken: initialPasswordChangeTicket,
+    newPassword: newPass,
+    confirmPassword: confirmPass
+  });
+  btn.disabled = false;
+  btn.textContent = 'Simpan Password Baru';
+
+  if (!r.ok) {
+    if (r.code === 'PASSWORD_CHANGE_REQUIRED') {
+      initialPasswordChangeTicket = '';
+      return showView('login', r.error || 'Sesi penggantian password berakhir. Silakan login kembali.');
+    }
+    return showPasswordChangeErr(r.error || 'Password baru gagal disimpan. Silakan coba kembali.');
+  }
+  if (!r.token || !r.user) return showPasswordChangeErr('Password mungkin sudah tersimpan, tetapi sesi login tidak lengkap. Silakan login menggunakan password baru.');
+
+  initialPasswordChangeTicket = '';
+  $('force-new-password').value = '';
+  $('force-confirm-password').value = '';
+  session.set({ token: r.token, expires: r.expires, user: r.user, autoSyncCount: 0 });
+  enterApp(r.user);
+  toast('Password berhasil diperbarui. Selamat datang, ' + (r.user.nama || r.user.nik) + '.');
 }
 
 /* ---------------------------------------------------------------------
@@ -2439,7 +2508,9 @@ async function saveWilayah() {
 function bind() {
   // Masuk
   $('form').addEventListener('submit', submitLogin);
+  $('force-password-form').addEventListener('submit', submitInitialPasswordChange);
   ['nik', 'pw'].forEach(i => $(i).addEventListener('input', () => $(i).classList.remove('bad')));
+  ['force-new-password', 'force-confirm-password'].forEach(i => $(i).addEventListener('input', () => { $(i).classList.remove('bad'); showPasswordChangeErr(''); }));
   $('eye').onclick = () => {
     const show = $('pw').type === 'password';
     $('pw').type = show ? 'text' : 'password';
@@ -2603,6 +2674,9 @@ function bind() {
 
 async function init() {
   bind();
+  // Invalidasi sesi v10.6 satu kali. Ini membuat semua pengguna login ulang setelah fitur keamanan dipasang;
+  // tab versi lama menerima event storage dan ikut keluar dari sesi lama.
+  try { localStorage.removeItem(LEGACY_SESSION_KEY); } catch (e) { /* abaikan */ }
   try { indexedDB.deleteDatabase(CACHE_DB_OLD); } catch (e) { /* abaikan */ }   // salinan data versi lama tidak dipakai lagi
   const s = session.get();
   if (!s || !s.token || !(s.expires > Date.now())) { session.clear(); return showView('login'); }

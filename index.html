@@ -55,6 +55,35 @@
   </div>
 </section>
 
+<!-- ================= Wajib Ganti Password Awal ================= -->
+<section id="password-change" class="login" hidden>
+  <div class="hero">
+    <div class="tag"><i></i>Keamanan Akun</div>
+    <div>
+      <h1>Amankan Akun, <mark>Perbarui Password.</mark></h1>
+      <p>Password awal sudah berhasil diverifikasi. Sebelum membuka Dashboard, buat password baru untuk melindungi akun Anda.</p>
+    </div>
+    <small>Portal Regional J</small>
+  </div>
+  <div class="pane">
+    <form class="card" id="force-password-form" autocomplete="on" novalidate>
+      <h2>Ganti Password</h2>
+      <p class="sub">Penggantian password wajib diselesaikan sebelum Anda dapat masuk ke Dashboard.</p>
+      <div id="force-password-err" class="msg" role="alert" hidden></div>
+      <div class="field">
+        <label for="force-new-password">Password Baru</label>
+        <input id="force-new-password" name="new-password" type="password" placeholder="Buat password baru" autocomplete="new-password" minlength="8" maxlength="200" required>
+      </div>
+      <div class="field">
+        <label for="force-confirm-password">Konfirmasi Password Baru</label>
+        <input id="force-confirm-password" name="confirm-password" type="password" placeholder="Ulangi password baru" autocomplete="new-password" minlength="8" maxlength="200" required>
+      </div>
+      <button class="btn" id="force-password-go" type="submit">Simpan Password Baru</button>
+      <p class="hint">Gunakan minimal 8 karakter. Password baru harus berbeda dari password awal.</p>
+    </form>
+  </div>
+</section>
+
 <!-- ================= Aplikasi ================= -->
 <section id="app" hidden>
   <header class="top">
@@ -353,7 +382,7 @@
       </nav>
       <section id="set-global" class="set-page">
       <form class="setbox" id="setform" novalidate>
-        <h2>Fitur: Penyesuaian Margin</h2>
+        <h2>Penyesuaian Margin</h2>
         <p>Persentase (N) yang ditambahkan ke Total Balance sebelum dikurangi simpanan sebagai pengganti "Margin" karena data tidak memuat Margin pasti, untuk Pelunasan &lt; 100.000, &lt; 200.000, &lt; 500.000 dan Pelunasan dari Simpanan. Rumus: Total Balance + (Total Balance &times; N%). Pelunasan Tanpa Margin tidak terpengaruh.</p>
         <div class="setrow">
           <label for="mval">N (%)</label>
@@ -365,7 +394,7 @@
       </form>
 
       <form class="setbox" id="wjform" novalidate>
-        <h2>Fitur: Simpanan Wajib</h2>
+        <h2>Simpanan Wajib</h2>
         <p>Centang kategori yang ikut menghitung Simp. Wajib (sudah dikurangi 2.000). Kategori yang tidak dicentang tidak memakai Simp. Wajib. Setiap kategori memakai pilihannya sendiri, jadi satu pinjaman bisa masuk kategori yang berbeda.</p>
         <fieldset class="wjlist" id="wjlist"><legend class="sr-only">Kategori yang menghitung Simp. Wajib</legend></fieldset>
         <div class="setrow"><button class="btn fit" id="wjsave" type="submit" disabled>Simpan</button></div>
@@ -374,8 +403,8 @@
       </form>
 
       <form class="setbox" id="rb-setting-form" novalidate>
-        <h2>Fitur: Rekening PAR Bergerak</h2>
-        <p>Tentukan tanggal N sebagai batas Rekening Bergerak. Rekening dihitung bergerak bila nilai Trans Pinj Terakhir pada Data_Upload lebih dari atau sama dengan tanggal ini. Tahun pada judul kolom mengikuti tahun tanggal N.</p>
+        <h2>Rekening PAR Bergerak</h2>
+        <p>Tentukan tanggal N sebagai batas Rekening Bergerak. Rekening dihitung bergerak bila nilai Trans Pinj Terakhir pada DB lebih dari atau sama dengan tanggal ini. Tahun pada judul kolom mengikuti tahun tanggal N.</p>
         <div class="setrow">
           <label for="rb-setting-date">Tanggal N</label>
           <input id="rb-setting-date" type="date" required>
@@ -388,7 +417,7 @@
 
       <section id="set-wilayah" class="set-page" hidden>
         <div class="wilayah-intro">
-          <h2>Fitur: Wilayah Kerja</h2>
+          <h2>Wilayah Kerja</h2>
           <p>Atur cabang yang boleh dilihat setiap akun. Centang cabang pada user terpilih, lalu simpan. Perubahan berlaku pada Dashboard, Ringkasan, dan file Excel yang diunduh dari akun tersebut.</p>
         </div>
         <div class="wilayah-layout">
@@ -424,7 +453,7 @@
     <!-- Unggah Excel (ADMINISTRATOR) -->
     <div id="p-up" role="tabpanel" aria-labelledby="t-up" hidden>
       <h1 class="ph">Unggah Excel</h1>
-      <p class="lead">Satu pintu untuk 2 proses.</p>
+      <p class="lead">Satu pintu untuk dua proses.</p>
       <label class="drop" id="drop" for="file">
         <b>Pilih file Excel</b>
         <span>atau seret file ke sini · .xls / .xlsx</span>
@@ -438,9 +467,9 @@
           <div id="updiffstats" class="stats"></div>
           <div class="updiff-grid">
             <div><b>Contoh LOAN NO Baru</b><p id="updiff-new-samples" class="updiff-samples">Tidak ada.</p><small>Baris lengkap dari Excel akan ditambahkan ke sheet <b>PAR Baru</b>.</small></div>
-            <div><b>Contoh LOAN NO Selesai</b><p id="updiff-done-samples" class="updiff-samples">Tidak ada.</p><small>Baris lengkap dari <b>Data_Upload</b> akan ditambahkan ke sheet <b>PAR Selesai</b>.</small></div>
+            <div><b>Contoh LOAN NO Selesai</b><p id="updiff-done-samples" class="updiff-samples">Tidak ada.</p><small>Baris lengkap dari <b>DB</b> akan ditambahkan ke sheet <b>PAR Selesai</b>.</small></div>
           </div>
-          <p class="updiff-help">Data_Upload lama belum diubah. Periksa hasil di atas, lalu konfirmasi untuk menyimpan arsip dan mengganti Data_Upload.</p>
+          <p class="updiff-help">Sinkron ke DB lama belum diubah. Periksa hasil di atas, lalu konfirmasi untuk menyimpan arsip dan mengganti DB.</p>
         </section>
         <div class="bar" id="upbar" hidden><i id="upfill"></i></div>
         <p id="upmsg" class="note" role="status"></p>
@@ -456,17 +485,17 @@
           <h1 class="ph">Versi &amp; Changelog</h1>
           <p class="lead">Catatan fitur, penyempurnaan, dan perbaikan PAR Web Tool dari fondasi awal hingga rilis saat ini.</p>
         </div>
-        <span class="version-current"><i></i> Versi saat ini <b>v10.5</b></span>
+        <span class="version-current"><i></i> Versi saat ini <b>v10.7</b></span>
       </div>
 
       <section class="version-overview" aria-label="Ringkasan versi saat ini">
         <div class="version-overview-main">
           <span class="version-overview-label">RILIS TERBARU</span>
-          <strong>Web Reg Tool v10.5</strong>
-          <p>Analisa Cabang lebih sederhana dengan tiga filter inti: Cabang, Tanggal Analisa, dan Bandingkan dengan.</p>
+          <strong>Web Tool Regional v10.7</strong>
+          <p>Penggantian password awal diwajibkan sebelum pengguna dapat mengakses Dashboard.</p>
         </div>
-        <div class="version-overview-stat"><strong>10.5</strong><span>Versi terbaru</span></div>
-        <div class="version-overview-stat"><strong>13</strong><span>Catatan rilis &amp; fondasi</span></div>
+        <div class="version-overview-stat"><strong>10.7</strong><span>Versi terbaru</span></div>
+        <div class="version-overview-stat"><strong>15</strong><span>Catatan rilis &amp; fondasi</span></div>
       </section>
 
       <div class="version-toolbar">
@@ -475,25 +504,39 @@
       </div>
 
       <div id="version-list" class="version-list">
-        <details class="version-item">
-          <summary><span class="version-marker latest">10.6</span><span class="version-summary"><b>Web Reg Tool v10.6</b><small>Filter Analisa Cabang disederhanakan</small></span><span class="version-tag">TERBARU</span></summary>
+        <details class="version-item" open>
+          <summary><span class="version-marker latest">10.7</span><span class="version-summary"><b>Web Tool Regional v10.7</b><small>Validasi password awal dan penggantian wajib</small></span><span class="version-tag">KEAMANAN</span></summary>
           <div class="version-body"><ul>
-            <li>Penambahan menu Versi & Changelog.</li>
+            <li>Setelah NIK dan password berhasil diverifikasi, akun yang masih menggunakan password default diarahkan ke halaman Ganti Password.</li>
+            <li>Pengguna belum memperoleh token Dashboard sebelum password baru berhasil disimpan.</li>
+            <li>Password baru dan konfirmasi divalidasi, minimal 8 karakter, berbeda dari password default, lalu disimpan pada sheet.</li>
+            <li>Challenge penggantian password memiliki token khusus berumur 15 menit dan tidak memiliki hak akses Dashboard.</li>
+            <li>Pengguna yang sudah mengganti password dapat login normal menggunakan password terbaru.</li>
+            <li>Sesi browser lama dibersihkan satu kali setelah pembaruan agar pengguna melakukan login kembali.</li>
           </ul></div>
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">10.5</span><span class="version-summary"><b>Web Reg Tool v10.5</b><small>Filter Analisa Cabang disederhanakan</small></span><span class="version-tag">ANALISA</span></summary>
+          <summary><span class="version-marker">10.6</span><span class="version-summary"><b>Web Tool Regional v10.6</b><small>Menu Versi &amp; Changelog</small></span><span class="version-tag">DOKUMENTASI</span></summary>
+          <div class="version-body"><ul>
+            <li>Menu Versi &amp; Changelog ditambahkan dan dapat dibuka semua tingkat pengguna.</li>
+            <li>Riwayat pembaruan dari fondasi aplikasi hingga v10.5 dirangkum per rilis, dapat dibuka/tutup, dan dicari.</li>
+          </ul></div>
+        </details>
+
+        <details class="version-item">
+          <summary><span class="version-marker">10.5</span><span class="version-summary"><b>Web Tool Regional v10.5</b><small>Filter Analisa Cabang disederhanakan</small></span><span class="version-tag">ANALISA</span></summary>
           <div class="version-body"><ul>
             <li>Filter Tahun dan Bulan dihapus dari Analisa Cabang.</li>
             <li>Filter yang tersisa hanya Cabang, Tanggal Analisa, dan Bandingkan dengan.</li>
             <li>Daftar tanggal mengikuti cabang yang dipilih dan seluruh periode yang tersedia dalam cakupan hak akses pengguna.</li>
+            <li>Format tanggal dropdown menggunakan <code>yyyy mmm dd</code>, misalnya <code>2026 Nov 02</code>.</li>
             <li>Aturan pembanding hanya mengizinkan tanggal yang lebih lama daripada Tanggal Analisa tetap dipertahankan.</li>
           </ul></div>
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">10.4</span><span class="version-summary"><b>Web Reg Tool v10.4</b><small>Format tanggal Analisa Cabang</small></span><span class="version-tag">UI</span></summary>
+          <summary><span class="version-marker">10.4</span><span class="version-summary"><b>Web Tool Regional v10.4</b><small>Format tanggal Analisa Cabang</small></span><span class="version-tag">UI</span></summary>
           <div class="version-body"><ul>
             <li>Dropdown Tanggal Analisa dan Bandingkan dengan menampilkan tanggal dalam format <code>yyyy mmm dd</code>.</li>
             <li>Nilai tanggal internal tetap <code>yyyy-MM-dd</code> agar pengurutan dan validasi periode tetap akurat.</li>
@@ -501,7 +544,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">10.3</span><span class="version-summary"><b>Web Reg Tool v10.3</b><small>Detail nilai perbandingan Analisa</small></span><span class="version-tag">ANALISA</span></summary>
+          <summary><span class="version-marker">10.3</span><span class="version-summary"><b>Web Tool Regional v10.3</b><small>Detail nilai perbandingan Analisa</small></span><span class="version-tag">ANALISA</span></summary>
           <div class="version-body"><ul>
             <li>Delapan kartu indikator menampilkan nilai periode terbaru dan nilai periode pembanding.</li>
             <li>Setiap kartu menampilkan perubahan nominal/jumlah dan persentase perubahan.</li>
@@ -511,7 +554,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">10.2</span><span class="version-summary"><b>Web Reg Tool v10.2</b><small>Validasi urutan tanggal perbandingan</small></span><span class="version-tag">ANALISA</span></summary>
+          <summary><span class="version-marker">10.2</span><span class="version-summary"><b>Web Tool Regional v10.2</b><small>Validasi urutan tanggal perbandingan</small></span><span class="version-tag">ANALISA</span></summary>
           <div class="version-body"><ul>
             <li>Perbandingan wajib bergerak dari tanggal lama ke tanggal terbaru.</li>
             <li>Dropdown pembanding hanya menampilkan tanggal sebelum periode analisa utama.</li>
@@ -521,7 +564,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">10.1</span><span class="version-summary"><b>Web Reg Tool v10.1</b><small>Koreksi header Excel Analisa</small></span><span class="version-tag">UPLOAD</span></summary>
+          <summary><span class="version-marker">10.1</span><span class="version-summary"><b>Web Tool Regional v10.1</b><small>Koreksi header Excel Analisa</small></span><span class="version-tag">UPLOAD</span></summary>
           <div class="version-body"><ul>
             <li>Nama kolom tujuan di sheet Analisa tetap konsisten, sehingga dashboard tidak perlu mengubah struktur datanya.</li>
             <li>Validasi header dibuat toleran terhadap perbedaan kapitalisasi, spasi, titik, dan tanda baca.</li>
@@ -529,15 +572,16 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">10.0</span><span class="version-summary"><b>Web Reg Tool v10.0 — Analisa Cabang</b><small>Upload multi-fungsi dan dashboard Analisa</small></span><span class="version-tag">FITUR BARU</span></summary>
+          <summary><span class="version-marker">10.0</span><span class="version-summary"><b>Web Tool Regional v10.0</b><small>Upload multi-fungsi dan dashboard Analisa</small></span><span class="version-tag">ADD: ANALISA CABANG</span></summary>
           <div class="version-body"><ul>
+            <li>Periode Analisa diambil dari tanggal pada nama file. Unggahan periode baru ditambahkan; unggahan ulang periode yang sama memperbarui data periode tersebut.</li>
             <li>Dashboard Analisa Cabang menampilkan Member, Outstanding, Disbursement, Saving, Repayment, Margin, Member PAR, dan Outstanding PAR.</li>
             <li>Perbandingan periode, kartu indikator, tabel per cabang, ekspor Excel, dan pembatasan Wilayah Kerja ditambahkan.</li>
           </ul></div>
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">09.0</span><span class="version-summary"><b>Web Reg Tool v09.0 — Progres Harian</b><small>Monitoring PAR Baru dan PAR Selesai</small></span><span class="version-tag">DASHBOARD</span></summary>
+          <summary><span class="version-marker">09.0</span><span class="version-summary"><b>Web Tool Regional v09.0</b><small>Monitoring PAR Baru dan PAR Selesai</small></span><span class="version-tag">ADD: PROGRES HARIAN</span></summary>
           <div class="version-body"><ul>
             <li>Dashboard Progres Harian menggunakan arsip sheet PAR Baru dan PAR Selesai berdasarkan Tanggal Progress pada bulan berjalan.</li>
             <li>Kartu total kenaikan dan penyelesaian Out. PAR serta Client PAR ditambahkan.</li>
@@ -548,7 +592,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">08.0</span><span class="version-summary"><b>Web Reg Tool v08.0</b><small>Tanggal Progress untuk arsip PAR</small></span><span class="version-tag">ARSIP</span></summary>
+          <summary><span class="version-marker">08.0</span><span class="version-summary"><b>Web Tool Regional v08.0</b><small>Tanggal Progress untuk arsip PAR</small></span><span class="version-tag">ARSIP</span></summary>
           <div class="version-body"><ul>
             <li>Sheet PAR Baru dan PAR Selesai mempertahankan data lama dengan metode append.</li>
             <li>Kolom Tanggal Progress diisi pada setiap baris arsip berdasarkan tanggal pemeriksaan.</li>
@@ -558,24 +602,24 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">07.0</span><span class="version-summary"><b>Web Reg Tool v07.0</b><small>Pengecualian batas sinkron untuk Administrator</small></span><span class="version-tag">AKSES</span></summary>
+          <summary><span class="version-marker">07.0</span><span class="version-summary"><b>Web Tool Regional v07.0</b><small>Pengecualian batas sinkron untuk Administrator</small></span><span class="version-tag">AKSES</span></summary>
           <div class="version-body"><ul>
-            <li>Batas sinkron dan logout otomatis tetap berlaku untuk tingkat pengguna.</li>
+            <li>Batas sinkron dan logout otomatis tetap berlaku untuk tingkat pengguna lainnya.</li>
           </ul></div>
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">06.0</span><span class="version-summary"><b>Web Reg Tool v06.0</b><small>Pemeriksaan PAR Baru dan PAR Selesai</small></span><span class="version-tag">UPLOAD</span></summary>
+          <summary><span class="version-marker">06.0</span><span class="version-summary"><b>Web Tool Regional v06.0</b><small>Pemeriksaan PAR Baru dan PAR Selesai</small></span><span class="version-tag">UPLOAD</span></summary>
           <div class="version-body"><ul>
             <li>LOAN NO pada Excel dibandingkan untuk menemukan rekening baru dan rekening yang selesai.</li>
             <li>Baris lengkap sumber disalin ke sheet PAR Baru dan PAR Selesai.</li>
-            <li>Hasil pemeriksaan ditampilkan sebelum konfirmasi dan pembaruan.</li>
+            <li>Hasil pemeriksaan ditampilkan sebelum konfirmasi dan pembaruan DB.</li>
             <li>Proses staging dan pemulihan commit ditambahkan untuk menjaga keamanan data saat proses unggah terputus.</li>
           </ul></div>
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">05.0</span><span class="version-summary"><b>Web Reg Tool v05.0</b><small>Batas sinkron otomatis per sesi pengguna</small></span><span class="version-tag">SISTEM</span></summary>
+          <summary><span class="version-marker">05.0</span><span class="version-summary"><b>Web Tool Regional v05.0</b><small>Batas sinkron otomatis per sesi pengguna</small></span><span class="version-tag">SISTEM</span></summary>
           <div class="version-body"><ul>
             <li>Sinkron otomatis dibatasi tiga kali per sesi login.</li>
             <li>Sebelum request otomatis keempat, sesi dibersihkan dan halaman dikembalikan ke Login.</li>
@@ -585,7 +629,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">04.0</span><span class="version-summary"><b>Web Reg Tool v04.0</b><small>Penyegaran UI dan pengalaman penggunaan</small></span><span class="version-tag">UI</span></summary>
+          <summary><span class="version-marker">04.0</span><span class="version-summary"><b>Web Tool Regional v04.0</b><small>Penyegaran UI dan pengalaman penggunaan</small></span><span class="version-tag">UI</span></summary>
           <div class="version-body"><ul>
             <li>UI diperbarui dengan pendekatan Clean Modern Dashboard dan Material Design.</li>
             <li>Sidebar desktop dan navigasi bawah untuk Android ditambahkan.</li>
@@ -595,10 +639,10 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">Dasar</span><span class="version-summary"><b>Fondasi aplikasi &amp; Dashboard Terpadu</b><small>Fitur inti sebelum rangkaian Web Reg Tool</small></span><span class="version-tag">FONDASI</span></summary>
+          <summary><span class="version-marker">Dasar</span><span class="version-summary"><b>Fondasi aplikasi &amp; Dashboard Terpadu</b><small>Fitur inti sebelum rangkaian Dashboard Modern</small></span><span class="version-tag">FONDASI</span></summary>
           <div class="version-body"><ul>
             <li>Dashboard Tool PAR, autentikasi pengguna, tingkat akses, dan pengaturan Wilayah Kerja dipertahankan sebagai fondasi aplikasi.</li>
-            <li>Dashboard Rekening Bergerak ditambahkan untuk rekap per cabang dan Branch Coordinator berdasarkan tanggal N.</li>
+            <li>Dashboard Rekening Bergerak ditambahkan untuk rekap per cabang dan Branch Coordinator berdasarkan tanggal N yang diatur Administrator/User 0.</li>
             <li>Rekening Bergerak, Ringkasan, dan Tool PAR disatukan di bawah satu menu utama Dashboard.</li>
             <li>Perpindahan ke Setting atau Unggah Excel menyembunyikan seluruh sub-menu Dashboard agar panel tidak bertumpuk.</li>
           </ul></div>
