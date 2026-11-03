@@ -201,7 +201,7 @@ async function api(action, data, opts) {
   const body = new URLSearchParams({ action });
   for (const k in data || {}) if (data[k] != null) body.set(k, data[k]);
   for (let attempt = 0; ; attempt++) {
-    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), API_TIMEOUT_MS);
+    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), (opts && opts.timeoutMs) || API_TIMEOUT_MS);
     try {
       const t0 = performance.now(), res = await fetch(API_URL, { method: 'POST', body, signal: ctl.signal });
       const tHead = performance.now();                  // jawaban pertama server tiba = server selesai menyiapkan data
@@ -274,6 +274,7 @@ const state = {
   sumBy: 'branch', sumSort: { key: 'n', dir: -1 }, sumQ: '', wjDirty: false,
   wilayah: null, wilayahSelected: '', wilayahDraft: [], wilayahDrafts: Object.create(null), wilayahLoading: false, wilayahLoadedAt: 0,
   rekening: null, rekeningLoading: false, rekeningLoadedAt: 0, dashboardPage: 'move',
+  progress: null, progressLoading: false, progressLoadedAt: 0,
   rbView: 'branch', rbSearch: { branch: '', coordinator: '' },
   rbSort: { branch: { key: 'name', dir: 1 }, coordinator: { key: 'name', dir: 1 } },
 };
@@ -289,11 +290,12 @@ function showErr(msg) { $('err').hidden = !msg; $('err').textContent = msg || ''
 const canSetting = u => !!u && (u.tingkat === 'ADMINISTRATOR' || u.tingkat === 'USER 0');   // menu Setting
 const TABS = ['dashboard', 'set', 'up'];
 function selectDashboardPage(which) {
-  if (which !== 'move' && which !== 'dash' && which !== 'sum') which = 'move';
+  if (which !== 'move' && which !== 'dash' && which !== 'sum' && which !== 'progress') which = 'move';
   state.dashboardPage = which;
   $('p-move').hidden = which !== 'move';
   $('p-dash').hidden = which !== 'dash';
   $('p-sum').hidden = which !== 'sum';
+  $('p-progress').hidden = which !== 'progress';
   document.querySelectorAll('[data-dashpage]').forEach(b =>
     b.setAttribute('aria-pressed', String(b.dataset.dashpage === which)));
   if (which === 'move' && state.user && !state.rekeningLoading
@@ -304,6 +306,8 @@ function selectDashboardPage(which) {
     drawSummary();
     if (state.user && !state.data && !state.loading) loadDash();
   }
+  if (which === 'progress' && state.user && !state.progressLoading
+      && (!state.progress || Date.now() - state.progressLoadedAt > AUTO_SYNC_MS)) loadProgresHarian();
 }
 function selectTab(which, focus) {
   if (which === 'up' && (!state.user || state.user.tingkat !== 'ADMINISTRATOR')) which = 'dashboard';
@@ -356,6 +360,12 @@ function reserveAutoSync() {
     logout('Sesi tidak tersedia. Silakan login kembali.', true);
     return false;
   }
+  // Administrator dikecualikan dari batas logout otomatis.
+  // Sinkronisasi tetap berjalan normal, tetapi penghitung tidak dinaikkan.
+  const activeUser = state.user || current.user;
+  if (String(activeUser && activeUser.tingkat || '').trim().toUpperCase() === 'ADMINISTRATOR') {
+    return true;
+  }
   const used = Math.max(0, Math.floor(Number(current.autoSyncCount) || 0));
   if (used >= AUTO_SYNC_MAX_PER_LOGIN) {
     // Jangan kirim request sinkron ke-4. Hapus sesi lokal lalu refresh menuju halaman login.
@@ -375,6 +385,8 @@ function startAutoSync() {
     if (!state.user || document.hidden) return;
     if (!$('p-dashboard').hidden && state.dashboardPage === 'move') {
       if (!state.rekeningLoading) loadRekeningBergerak({ automatic: true });
+    } else if (!$('p-dashboard').hidden && state.dashboardPage === 'progress') {
+      if (!state.progressLoading) loadProgresHarian({ automatic: true });
     } else if (state.data && !state.loading) loadDash({ automatic: true });
   };
   // Jarak pemeriksaan tetap 2 menit; waktu pemeriksaan pertama disebar acak 0–20 detik
@@ -394,6 +406,7 @@ function logout(msg, forceRefresh) {
   const cacheClear = cache.clear();
   state.wilayah = null; state.wilayahDraft = []; state.wilayahDrafts = Object.create(null); state.wilayahSelected = ''; setNote('wjmsg', '');
   state.rekening = null; state.rekeningLoadedAt = 0; state.rekeningLoading = false;
+  state.progress = null; state.progressLoadedAt = 0; state.progressLoading = false;
   clearDash(); resetUpload();
   showView('login', msg || '');
   // Hanya logout otomatis karena batas sinkron yang memaksa refresh penuh.
@@ -429,6 +442,7 @@ function enterApp(user) {
   state.cat = 'a'; state.q = ''; state.branch = ''; state.staf = ''; state.page = 0; state.sort = { label: '', dir: 1 };
   resetUpload(); setNote('setmsg', ''); setNote('wjmsg', ''); setNote('rb-setting-msg', ''); state.wjDirty = false;
   state.rekening = null; state.rekeningLoadedAt = 0;
+  state.progress = null; state.progressLoadedAt = 0; state.progressLoading = false;
   state.dashboardPage = 'move';
   state.rbSearch = { branch: '', coordinator: '' };
   state.rbSort = { branch: { key: 'name', dir: 1 }, coordinator: { key: 'name', dir: 1 } };
@@ -927,13 +941,15 @@ async function readExcel(file) {
 }
 
 /* ---------------------------------------------------------------------
-   10. Unggah
+   10. Unggah + pemeriksaan perubahan Loan No
    --------------------------------------------------------------------- */
 let pending = null;
 
 function upBar(f) { $('upbar').hidden = f == null; if (f != null) $('upfill').style.width = Math.round(f * 100) + '%'; }
 function resetUpload() {
   pending = null; $('upinfo').hidden = true; $('file').value = ''; $('upstats').replaceChildren(); $('uptbl').replaceChildren();
+  $('updiff').hidden = true; $('updiffstats').replaceChildren(); $('updiff-new-samples').textContent = 'Tidak ada.'; $('updiff-done-samples').textContent = 'Tidak ada.';
+  $('upgo').textContent = 'Periksa LOAN NO'; $('upgo').disabled = false;
   setNote('upmsg', ''); upBar(null);
 }
 
@@ -951,14 +967,27 @@ function renderPreview(d) {
   $('uptbl').replaceChildren(h('thead', null, head), h('tbody', null, body));
 }
 
+function renderUploadCompare(c) {
+  const chip = (text, warn) => h('span', { class: 'st' + (warn ? ' warn' : ''), text });
+  put($('updiffstats'),
+    chip(fmt(c.uploadCount || 0) + ' LOAN NO pada Excel'),
+    chip(fmt(c.currentCount || 0) + ' LOAN NO pada Data_Upload'),
+    chip(fmt(c.newCount || 0) + ' PAR Baru', (c.newCount || 0) > 0),
+    chip(fmt(c.doneCount || 0) + ' PAR Selesai', (c.doneCount || 0) > 0),
+    c.progressDate ? chip('Tanggal Progress: ' + c.progressDate) : null);
+  $('updiff-new-samples').textContent = (c.newSamples && c.newSamples.length) ? c.newSamples.join(' · ') : 'Tidak ditemukan LOAN NO baru.';
+  $('updiff-done-samples').textContent = (c.doneSamples && c.doneSamples.length) ? c.doneSamples.join(' · ') : 'Tidak ditemukan LOAN NO selesai.';
+  $('updiff').hidden = false;
+}
+
 async function pickFile(file) {
   if (!file) return;
   resetUpload(); $('upinfo').hidden = false; $('upgo').disabled = true; setNote('upmsg', 'Membaca file…');
-  await nextFrame();                                       // beri kesempatan layar menampilkan status
+  await nextFrame();
   try {
     pending = await readExcel(file);
     renderPreview(pending);
-    setNote('upmsg', 'Periksa pratinjau, lalu kirim. Data lama di tab Data_Upload akan diganti.');
+    setNote('upmsg', 'Periksa pratinjau, lalu jalankan pemeriksaan LOAN NO. Data_Upload lama belum akan diubah.');
     $('upgo').disabled = false;
   } catch (e) {
     pending = null; $('upstats').replaceChildren(); $('uptbl').replaceChildren();
@@ -969,35 +998,68 @@ async function pickFile(file) {
 function upFail(r, sent) {
   if (r.code === 'SESSION_REQUIRED') return logout(r.error);
   upBar(null); $('upgo').disabled = false;
-  setNote('upmsg', (r.error || 'Gagal mengirim data.') + (sent ? ' Data di Sheet baru terisi ' + fmt(sent) + ' baris, ulangi unggah.' : ''), 'bad');
+  setNote('upmsg', (r.error || 'Gagal memproses data.') + (sent ? ' Staging menerima ' + fmt(sent) + ' dari ' + fmt(pending && pending.totalRows || sent) + ' baris; Data_Upload lama masih dipertahankan.' : ''), 'bad');
 }
 
-async function sendUpload() {
-  if (!pending) return;
+async function stageAndCheck() {
+  if (!pending || !Array.isArray(pending.rows)) return;
   const total = pending.rows.length, tok = (session.get() || {}).token;
-  const ok = await askConfirm('Ganti seluruh data?', 'Seluruh isi tab Data_Upload akan diganti dengan ' + fmt(total) + ' baris dari file ini. Data lama tidak bisa dikembalikan.', 'Ganti data');
+  const ok = await askConfirm('Periksa file Excel?', 'File akan disiapkan sementara dan dibandingkan berdasarkan Loan No. Data_Upload lama tidak akan berubah sebelum Anda mengonfirmasi hasil pemeriksaan.', 'Mulai pemeriksaan');
   if (!ok) return;
-  $('upgo').disabled = true; upBar(0); setNote('upmsg', 'Menyiapkan tab Data_Upload…');
+  $('upgo').disabled = true; upBar(0); setNote('upmsg', 'Menyiapkan area pemeriksaan…');
   let r = await api('webUploadStart', { token: tok, total, file: pending.name });
   if (!r.ok) return upFail(r, 0);
   const id = r.uploadId; let sent = 0;
   for (let seq = 0; sent < total; seq++) {
     const part = pending.rows.slice(sent, sent + UP_CHUNK); let good = false, res;
-    for (let t = 0; t < 3 && !good; t++) {                 // kiriman ulang aman: server mengabaikan potongan yang sudah masuk
+    for (let t = 0; t < 3 && !good; t++) {
       res = await api('webUploadChunk', { token: tok, uploadId: id, seq, rows: JSON.stringify(part) });
       good = res.ok;
       if (!good) { if (res.code === 'SESSION_REQUIRED') break; await sleep(1500 * (t + 1)); }
     }
-    if (!good) return upFail(res, sent);
+    if (!good) { pending.uploadId = id; return upFail(res, sent); }
     sent += part.length; upBar(sent / total);
-    setNote('upmsg', 'Mengirim ' + fmt(sent) + ' dari ' + fmt(total) + ' baris…');
+    setNote('upmsg', 'Menyiapkan pemeriksaan ' + fmt(sent) + ' dari ' + fmt(total) + ' baris…');
   }
-  setNote('upmsg', 'Menyimpan dan menghitung ulang dashboard…');
-  r = await api('webUploadFinish', { token: tok, uploadId: id, total });
-  if (!r.ok) return upFail(r, total);
-  upBar(1); setNote('upmsg', 'Selesai: ' + fmt(r.rows) + ' baris tersimpan di tab Data_Upload.', 'good');
-  toast('Data diperbarui. Dashboard dimuat ulang.');
-  pending = null; loadDash();                              // segarkan dashboard dengan data baru
+  setNote('upmsg', 'Membandingkan seluruh LOAN NO dengan Data_Upload…');
+  r = await api('webUploadCheck', { token: tok, uploadId: id, total }, { timeoutMs: 300000 });
+  if (!r.ok) { pending.uploadId = id; return upFail(r, total); }
+  pending.uploadId = id; pending.totalRows = total; pending.checked = true; pending.compare = r.compare || {};
+  pending.rows = null; // file sudah aman di sheet staging; bebaskan memori browser
+  renderUploadCompare(pending.compare);
+  upBar(null);
+  $('upgo').textContent = 'Konfirmasi & Upload ke Data_Upload'; $('upgo').disabled = false;
+  setNote('upmsg', 'Pemeriksaan selesai. Data_Upload lama masih utuh dan belum diganti.', 'good');
+}
+
+async function commitUpload() {
+  if (!pending || !pending.checked || !pending.uploadId) return;
+  const c = pending.compare || {};
+  const ok = await askConfirm('Konfirmasi hasil pemeriksaan?',
+    'PAR Baru: ' + fmt(c.newCount || 0) + ' baris. PAR Selesai: ' + fmt(c.doneCount || 0) + ' baris. Tanggal Progress: ' + (c.progressDate || '-') + '. Arsip lama tetap dipertahankan dan data baru ditambahkan di bawah baris terakhir. Setelah arsip disimpan, Data_Upload akan diganti dengan ' + fmt(pending.totalRows) + ' baris dari Excel.',
+    'Simpan arsip & upload');
+  if (!ok) return;
+  $('upgo').disabled = true; upBar(null); setNote('upmsg', 'Menyimpan PAR Baru dan PAR Selesai, lalu memperbarui Data_Upload…');
+  const tok = (session.get() || {}).token;
+  const r = await api('webUploadCommit', { token: tok, uploadId: pending.uploadId }, { timeoutMs: 300000 });
+  if (!r.ok) {
+    upBar(null); $('upgo').disabled = false;
+    $('upgo').textContent = 'Ulangi Konfirmasi & Upload';
+    return setNote('upmsg', r.error || 'Penyimpanan belum selesai. Tekan ulang untuk melanjutkan proses.', 'bad');
+  }
+  upBar(1);
+  setNote('upmsg', 'Selesai. Data_Upload: ' + fmt(r.rows) + ' baris · PAR Baru: ' + fmt(r.newCount || c.newCount || 0) + ' baris · PAR Selesai: ' + fmt(r.doneCount || c.doneCount || 0) + ' baris · Tanggal Progress: ' + (r.progressDate || c.progressDate || '-') + '.', 'good');
+  toast('Pemeriksaan dan unggah Excel berhasil. Dashboard dimuat ulang.');
+  // Unggahan mengubah arsip dan Data_Upload; batalkan data sub-dashboard yang tersimpan di memori.
+  state.progress = null; state.progressLoadedAt = 0;
+  state.rekening = null; state.rekeningLoadedAt = 0;
+  pending = null; $('file').value = ''; $('upgo').disabled = true; loadDash();
+}
+
+async function sendUpload() {
+  if (!pending) return;
+  if (pending.checked) return commitUpload();
+  return stageAndCheck();
 }
 
 /* ---------------------------------------------------------------------
@@ -1532,6 +1594,263 @@ async function exportRekeningBergerak() {
 }
 
 /* ---------------------------------------------------------------------
+   Dashboard: Progres Harian
+   Data dari PAR Baru/PAR Selesai. Penghitungan periode dan cakupan cabang
+   dilakukan di server; browser hanya menyajikan ringkasan dan ekspor.
+   --------------------------------------------------------------------- */
+function progresChartCompact(value, money) {
+  const n = Number(value) || 0;
+  if (money) {
+    const a = Math.abs(n), sign = n < 0 ? '-' : '';
+    if (a >= 1e9) return sign + nf1.format(a / 1e9) + ' M';
+    if (a >= 1e6) return sign + nf1.format(a / 1e6) + ' jt';
+    if (a >= 1e3) return sign + nf1.format(a / 1e3) + ' rb';
+    return sign + nf1.format(a);
+  }
+  return fmt(n);
+}
+
+function progresDayChart(hostId, daily, firstKey, secondKey, money) {
+  const host = $(hostId);
+  const data = Array.isArray(daily) ? daily : [];
+  if (!data.length) { put(host, h('div', { class: 'ph-chart-empty', text: 'Belum ada data pada bulan berjalan.' })); return; }
+  const ns = 'http://www.w3.org/2000/svg';
+  const width = Math.max(620, data.length * 25 + 82), height = 250;
+  const left = 72, right = 18, top = 16, bottom = 42, plotW = width - left - right, plotH = height - top - bottom;
+  const maxValue = Math.max(0, ...data.map(d => Math.max(Number(d[firstKey]) || 0, Number(d[secondKey]) || 0)));
+  const scaleMax = maxValue > 0 ? maxValue * 1.12 : 1;
+  const step = plotW / data.length, barW = Math.max(3, Math.min(10, step * 0.31));
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
+  svg.setAttribute('width', width); svg.setAttribute('height', height);
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', money ? 'Grafik Out PAR baru dibanding PAR selesai per hari' : 'Grafik jumlah Client PAR baru dibanding selesai per hari');
+  const add = (tag, attrs, text) => {
+    const e = document.createElementNS(ns, tag);
+    Object.keys(attrs || {}).forEach(k => e.setAttribute(k, attrs[k]));
+    if (text != null) e.textContent = text;
+    svg.appendChild(e); return e;
+  };
+  for (let t = 0; t <= 4; t++) {
+    const y = top + plotH - (plotH * t / 4), value = scaleMax * t / 4;
+    add('line', { x1: left, y1: y, x2: width - right, y2: y, stroke: '#e5eee9', 'stroke-width': 1 });
+    add('text', { x: left - 9, y: y + 4, fill: '#66796f', 'font-size': 10, 'text-anchor': 'end' }, progresChartCompact(value, money));
+  }
+  add('line', { x1: left, y1: top + plotH, x2: width - right, y2: top + plotH, stroke: '#9bb5a8', 'stroke-width': 1.2 });
+  data.forEach((d, i) => {
+    const cx = left + i * step + step / 2;
+    const vals = [Number(d[firstKey]) || 0, Number(d[secondKey]) || 0];
+    const colors = ['#0a7a5a', '#f0c419'];
+    vals.forEach((v, j) => {
+      const bh = Math.max(0, v / scaleMax * plotH);
+      if (bh > 0) {
+        const rect = add('rect', { x: cx + (j === 0 ? -barW - 1 : 1), y: top + plotH - bh, width: barW, height: bh,
+          rx: 2, fill: colors[j], opacity: .94 });
+        const title = document.createElementNS(ns, 'title');
+        title.textContent = d.date + ' · ' + (j === 0 ? 'PAR Baru' : 'PAR Selesai') + ': ' + (money ? rp(v) : fmt(v) + ' Loan No');
+        rect.appendChild(title);
+      }
+    });
+    const day = Number(String(d.date).slice(8, 10));
+    if (day === 1 || day % 3 === 1 || i === data.length - 1) {
+      add('text', { x: cx, y: height - 17, fill: '#66796f', 'font-size': 10, 'text-anchor': 'middle' }, String(day));
+    }
+  });
+  const scroller = h('div', { class: 'ph-chart-scroll' });
+  scroller.append(svg); put(host, scroller);
+}
+
+function progresRenderRanking(hostId, rows, kind) {
+  const host = $(hostId);
+  if (!rows || !rows.length) {
+    put(host, h('div', { class: 'ph-empty-row', text: 'Belum ada progres untuk bulan berjalan.' })); return;
+  }
+  put(host, ...rows.map((r, i) => {
+    const amount = kind === 'new' ? r.newBalance : r.doneBalance;
+    const count = kind === 'new' ? r.newCount : r.doneCount;
+    return h('article', { class: 'ph-rank-row' },
+      h('span', { class: 'ph-rank-number', text: String(i + 1).padStart(2, '0') }),
+      h('div', { class: 'ph-rank-main' }, h('b', { text: r.branch }), h('span', { text: fmt(count) + ' Client PAR (Loan No)' })),
+      h('div', { class: 'ph-rank-value' }, h('b', { text: rpShort(amount), title: rp(amount) }), h('small', { text: 'Out. PAR' })));
+  }));
+}
+
+function progresRenderTopUp(data) {
+  const table = $('ph-topup-table');
+  const head = ['Kategori TOP UP', 'PAR Baru · Client', 'PAR Baru · Out. PAR', 'PAR Selesai · Client', 'PAR Selesai · Out. PAR'];
+  const thead = h('thead', {}, h('tr', {}, ...head.map(x => h('th', { text: x }))));
+  const tbody = h('tbody', {});
+  (data.topUp || []).forEach(r => {
+    tbody.append(h('tr', {},
+      h('th', { scope: 'row', text: r.category }),
+      h('td', { text: fmt(r.newCount) }), h('td', { text: rp(r.newBalance) }),
+      h('td', { text: fmt(r.doneCount) }), h('td', { text: rp(r.doneBalance) })));
+  });
+  const total = (data.topUp || []).reduce((a, r) => {
+    a.newCount += Number(r.newCount) || 0; a.newBalance += Number(r.newBalance) || 0;
+    a.doneCount += Number(r.doneCount) || 0; a.doneBalance += Number(r.doneBalance) || 0; return a;
+  }, { newCount: 0, newBalance: 0, doneCount: 0, doneBalance: 0 });
+  const tfoot = h('tfoot', {}, h('tr', {}, h('th', { text: 'TOTAL 3 KATEGORI' }),
+    h('td', { text: fmt(total.newCount) }), h('td', { text: rp(total.newBalance) }),
+    h('td', { text: fmt(total.doneCount) }), h('td', { text: rp(total.doneBalance) })));
+  put(table, thead, tbody, tfoot);
+  const unknown = data.unknownTopUp || { newCount: 0, doneCount: 0 };
+  $('ph-topup-note').textContent = (unknown.newCount || unknown.doneCount)
+    ? 'Ada nilai Top Up di luar tiga kategori yang diminta: ' + fmt(unknown.newCount) + ' baris PAR Baru dan ' + fmt(unknown.doneCount) + ' baris PAR Selesai. Nilai tersebut tetap masuk kartu total dan grafik, tetapi tidak dimasukkan ke tabel tiga kategori.'
+    : 'Seluruh data dengan Loan No pada bulan berjalan memiliki kategori TOP UP yang sesuai dengan tiga kategori di atas.';
+}
+
+function paintProgresHarian(data) {
+  $('ph-meta').textContent = data.monthLabel + ' · periode ' + fmtStamp(data.monthKey + '-01') + ' s.d. ' + fmtStamp(data.asOf)
+    + ' · sumber: PAR Baru dan PAR Selesai';
+  $('ph-scope').textContent = data.scope || 'Sesuai Wilayah Kerja';
+  $('ph-new-balance').textContent = rpShort(data.totals.newBalance);
+  $('ph-new-balance').title = rp(data.totals.newBalance);
+  $('ph-new-count').textContent = fmt(data.totals.newCount);
+  $('ph-done-balance').textContent = rpShort(data.totals.doneBalance);
+  $('ph-done-balance').title = rp(data.totals.doneBalance);
+  $('ph-done-count').textContent = fmt(data.totals.doneCount);
+  const netBalance = Number(data.netBalance) || 0, netCount = Number(data.netCount) || 0;
+  $('ph-net-balance').textContent = (netBalance > 0 ? '+' : '') + rpShort(netBalance);
+  $('ph-net-balance').title = rp(netBalance);
+  $('ph-net-count').textContent = (netCount > 0 ? '+' : '') + fmt(netCount);
+  $('ph-net-balance').className = netBalance > 0 ? 'negative' : netBalance < 0 ? 'positive' : '';
+  $('ph-net-count').className = netCount > 0 ? 'negative' : netCount < 0 ? 'positive' : '';
+  $('ph-net-balance-note').textContent = netBalance > 0 ? 'Kenaikan lebih besar daripada penyelesaian' : netBalance < 0 ? 'Penyelesaian lebih besar daripada kenaikan' : 'Kenaikan dan penyelesaian seimbang';
+  $('ph-net-count-note').textContent = netCount > 0 ? 'Loan No baru lebih banyak daripada yang selesai' : netCount < 0 ? 'Loan No selesai lebih banyak daripada yang baru' : 'Jumlah Loan No seimbang';
+  progresRenderRanking('ph-top-new', data.topNew, 'new');
+  progresRenderRanking('ph-top-done', data.topDone, 'done');
+  progresDayChart('ph-chart-out', data.daily, 'newBalance', 'doneBalance', true);
+  progresDayChart('ph-chart-client', data.daily, 'newCount', 'doneCount', false);
+  progresRenderTopUp(data);
+
+  const warnings = [];
+  if (data.scopeMessage) warnings.push(data.scopeMessage);
+  if (data.missingSheets && data.missingSheets.length) warnings.push('Sheet belum ditemukan: ' + data.missingSheets.join(', ') + '. Buat sheet melalui proses unggah versi terbaru.');
+  if (data.missingDate) warnings.push(fmt(data.missingDate) + ' baris arsip memiliki Tanggal Progress kosong. Baris tersebut tidak masuk hitungan bulan berjalan.');
+  if (data.invalidDate) warnings.push(fmt(data.invalidDate) + ' baris arsip memiliki Tanggal Progress tidak valid. Baris tersebut tidak masuk hitungan bulan berjalan.');
+  const unknown = data.unknownTopUp || {};
+  if (unknown.newCount || unknown.doneCount) warnings.push('Kategori TOP UP di luar NON TOP-UP, REGULER, dan KHUSUS: PAR Baru ' + fmt(unknown.newCount || 0) + ' Loan No; PAR Selesai ' + fmt(unknown.doneCount || 0) + ' Loan No.');
+  const notice = $('ph-notice'); notice.hidden = !warnings.length; notice.textContent = warnings.join(' ');
+  $('ph-sync').textContent = 'Terakhir diperiksa: ' + (data.generatedAt || '').replace('T', ' ') + (data.timezone ? ' · Zona waktu ' + data.timezone : '');
+  $('ph-export').disabled = false;
+}
+
+async function loadProgresHarian(options) {
+  if (state.progressLoading || !state.user) return;
+  const automatic = !!(options && options.automatic);
+  state.progressLoading = true;
+  $('ph-refresh').disabled = true; $('ph-export').disabled = true;
+  if (!automatic) $('ph-sync').textContent = 'Mengambil arsip PAR Baru dan PAR Selesai…';
+  setNote('ph-msg', '');
+  try {
+    if (automatic && !reserveAutoSync()) return;
+    const r = await api('webProgresHarian', { token: (session.get() || {}).token }, { retry: true });
+    if (r.code === 'SESSION_REQUIRED') return logout(r.error);
+    if (!r.ok) {
+      state.progress = null;
+      $('ph-meta').textContent = 'Progres Harian gagal dimuat.';
+      $('ph-notice').hidden = false; $('ph-notice').textContent = r.error || 'Terjadi kesalahan saat mengambil data.';
+      $('ph-sync').textContent = '';
+      return;
+    }
+    state.progress = r; state.progressLoadedAt = Date.now();
+    paintProgresHarian(r);
+  } catch (err) {
+    $('ph-notice').hidden = false;
+    $('ph-notice').textContent = err && err.message ? err.message : 'Jaringan tidak dapat dihubungi. Periksa koneksi lalu muat ulang.';
+  } finally {
+    state.progressLoading = false; $('ph-refresh').disabled = false;
+    $('ph-export').disabled = !state.progress;
+  }
+}
+
+function progresExcelSheet(title, subtitle, headers, rows, widths, numericColumns) {
+  const aoa = [[title], [subtitle], [], headers].concat(rows);
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const lastCol = Math.max(0, headers.length - 1), headerRow = 3;
+  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: lastCol } }, { s: { r: 1, c: 0 }, e: { r: 1, c: lastCol } }];
+  ws['!cols'] = (widths || headers.map(() => 18)).map(w => ({ wch: w }));
+  ws['!freeze'] = { xSplit: 0, ySplit: 4 };
+  const paint = (cell, fill, color, bold, size) => { if (ws[cell]) ws[cell].s = {
+    font: { name: 'Aptos', sz: size || 10, bold: !!bold, color: { rgb: color || '18352B' } },
+    fill: { patternType: 'solid', fgColor: { rgb: fill } },
+    alignment: { vertical: 'center', wrapText: true },
+    border: { bottom: { style: 'thin', color: { rgb: 'D5E5DC' } } }
+  }; };
+  paint('A1', '064E3B', 'FFFFFF', true, 16); paint('A2', 'F3FAF6', '405D50', false, 10);
+  for (let c = 0; c < headers.length; c++) paint(XLSX.utils.encode_cell({ r: headerRow, c }), '0A7A5A', 'FFFFFF', true, 10);
+  rows.forEach((row, i) => {
+    const ri = 4 + i;
+    for (let c = 0; c < row.length; c++) {
+      const cell = XLSX.utils.encode_cell({ r: ri, c });
+      if (ws[cell]) {
+        const isTotal = /^TOTAL/i.test(String(row[0] || ''));
+        ws[cell].s = { font: { name: 'Aptos', sz: 10, bold: isTotal, color: { rgb: isTotal ? '064E3B' : '18352B' } },
+          fill: { patternType: 'solid', fgColor: { rgb: isTotal ? 'E3F5ED' : (i % 2 ? 'F7FBF8' : 'FFFFFF') } },
+          border: { bottom: { style: isTotal ? 'thin' : 'hair', color: { rgb: 'E2ECE6' } }, ...(isTotal ? { top: { style: 'thin', color: { rgb: '0A7A5A' } } } : {}) }, alignment: { vertical: 'center' } };
+        if ((numericColumns || []).includes(c)) { ws[cell].t = typeof row[c] === 'number' ? 'n' : ws[cell].t; ws[cell].z = '#,##0;[Red]-#,##0'; }
+      }
+    }
+  });
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: headerRow, c: 0 }, e: { r: headerRow + Math.max(rows.length, 1), c: lastCol } }) };
+  return ws;
+}
+
+async function exportProgresHarian() {
+  const d = state.progress; if (!d) return;
+  const btn = $('ph-export'); btn.disabled = true; setNote('ph-msg', 'Menyiapkan laporan Excel…');
+  try {
+    await Promise.all([loadXLSX(), nextFrame()]);
+    const wb = XLSX.utils.book_new(), add = (name, ws) => XLSX.utils.book_append_sheet(wb, ws, name);
+    const sub = 'Periode ' + d.monthLabel + ' · s.d. ' + fmtStamp(d.asOf) + ' · ' + d.scope;
+    const summaryRows = [
+      ['PAR Baru · Client PAR', d.totals.newCount], ['PAR Baru · Out. PAR', d.totals.newBalance],
+      ['PAR Selesai · Client PAR', d.totals.doneCount], ['PAR Selesai · Out. PAR', d.totals.doneBalance],
+      ['Selisih Client PAR', d.netCount], ['Selisih Out. PAR', d.netBalance]
+    ];
+    add('Ringkasan', progresExcelSheet('PROGRES HARIAN', sub, ['Indikator', 'Nilai'], summaryRows, [38, 24], [1]));
+    add('Top 3 PAR Baru', progresExcelSheet('3 CABANG KENAIKAN TERTINGGI', sub, ['Cabang', 'Client PAR / Loan No', 'Out. PAR'],
+      (d.topNew || []).map(x => [x.branch, x.newCount, x.newBalance]), [38, 24, 24], [1, 2]));
+    add('Top 3 PAR Selesai', progresExcelSheet('3 CABANG PENYELESAIAN TERTINGGI', sub, ['Cabang', 'Client PAR / Loan No', 'Out. PAR'],
+      (d.topDone || []).map(x => [x.branch, x.doneCount, x.doneBalance]), [38, 24, 24], [1, 2]));
+    const dailyOutRows = (d.daily || []).map(x => [x.date.split('-').reverse().join('-'), x.newBalance, x.doneBalance, x.newBalance - x.doneBalance]);
+    dailyOutRows.push(['TOTAL BULAN', d.totals.newBalance, d.totals.doneBalance, d.netBalance]);
+    const dailyClientRows = (d.daily || []).map(x => [x.date.split('-').reverse().join('-'), x.newCount, x.doneCount, x.newCount - x.doneCount]);
+    dailyClientRows.push(['TOTAL BULAN', d.totals.newCount, d.totals.doneCount, d.netCount]);
+    const topUpRows = (d.topUp || []).map(x => [x.category, x.newCount, x.newBalance, x.doneCount, x.doneBalance]);
+    topUpRows.push(['TOTAL 3 KATEGORI', topUpRows.reduce((a, x) => a + x[1], 0), topUpRows.reduce((a, x) => a + x[2], 0),
+      topUpRows.reduce((a, x) => a + x[3], 0), topUpRows.reduce((a, x) => a + x[4], 0)]);
+    const branchRows = (d.branches || []).map(x => [x.branch, x.newCount, x.newBalance, x.doneCount, x.doneBalance]);
+    branchRows.push(['TOTAL', d.totals.newCount, d.totals.newBalance, d.totals.doneCount, d.totals.doneBalance]);
+    add('Progress Out PAR', progresExcelSheet('PROGRES OUT. PAR PER HARI', sub, ['Tanggal Progress', 'PAR Baru', 'PAR Selesai', 'Selisih Harian'],
+      dailyOutRows, [20, 24, 24, 24], [1, 2, 3]));
+    add('Progress Client', progresExcelSheet('PROGRES CLIENT PAR PER HARI', sub, ['Tanggal Progress', 'PAR Baru · Loan No', 'PAR Selesai · Loan No', 'Selisih Harian'],
+      dailyClientRows, [20, 24, 26, 20], [1, 2, 3]));
+    add('TOP UP', progresExcelSheet('KOMULATIF PAR BARU VS PAR SELESAI BERDASARKAN TOP UP', sub,
+      ['Kategori', 'PAR Baru · Client', 'PAR Baru · Out. PAR', 'PAR Selesai · Client', 'PAR Selesai · Out. PAR'],
+      topUpRows, [20, 20, 24, 24, 24], [1, 2, 3, 4]));
+    add('Per Cabang', progresExcelSheet('REKAP PROGRES PER CABANG', sub,
+      ['Cabang', 'PAR Baru · Client', 'PAR Baru · Out. PAR', 'PAR Selesai · Client', 'PAR Selesai · Out. PAR'],
+      branchRows, [38, 20, 24, 24, 24], [1, 2, 3, 4]));
+    add('Petunjuk', progresExcelSheet('PETUNJUK LAPORAN', sub, ['Istilah', 'Keterangan'], [
+      ['Sumber', 'Sheet PAR Baru dan PAR Selesai.'],
+      ['Periode', 'Tanggal Progress dari tanggal 1 bulan berjalan sampai tanggal proses laporan.'],
+      ['Client PAR', 'Jumlah Loan No tidak kosong pada arsip.'],
+      ['Out. PAR', 'Penjumlahan Total Balance pada baris arsip.'],
+      ['PAR Baru', 'Loan No yang tidak ditemukan pada Data_Upload ketika pemeriksaan upload.'],
+      ['PAR Selesai', 'Loan No pada Data_Upload lama yang tidak ditemukan pada Excel terbaru.'],
+      ['Cakupan', 'Administrator melihat seluruh cabang; pengguna lain hanya cabang pada Wilayah_Kerja.'],
+      ['TOP UP lainnya', 'Nilai TOP UP di luar NON TOP-UP, REGULER, dan KHUSUS tetap masuk total utama namun tidak masuk tabel tiga kategori.']
+    ], [24, 100], []));
+    XLSX.writeFile(wb, 'Progres_Harian_' + d.monthKey + '.xlsx');
+    setNote('ph-msg', 'Laporan Excel berhasil dibuat (8 sheet).', 'good');
+  } catch (err) {
+    setNote('ph-msg', err && err.message ? err.message : 'Gagal membuat laporan Excel.', 'bad');
+  } finally { btn.disabled = false; }
+}
+
+/* ---------------------------------------------------------------------
    Setting: Penyesuaian Margin (ADMINISTRATOR dan USER 0; server memeriksa ulang)
    --------------------------------------------------------------------- */
 async function saveMargin() {
@@ -1779,6 +2098,10 @@ function bind() {
   $('rb-setting-form').addEventListener('submit', e => { e.preventDefault(); saveRekeningBergerakSetting(); });
   $('rb-setting-date').addEventListener('input', () => { $('rb-setting-date').classList.remove('bad'); setNote('rb-setting-msg', ''); });
 
+  // Dashboard Progres Harian
+  $('ph-refresh').onclick = () => loadProgresHarian();
+  $('ph-export').onclick = exportProgresHarian;
+
   // Dashboard Tool PAR (dashboard lama)
   $('dref').onclick = () => loadDash();
   $('ddl').onclick = exportAll;
@@ -1848,6 +2171,8 @@ function bind() {
     if (!document.hidden && state.user) {
       if (!$('p-dashboard').hidden && state.dashboardPage === 'move') {
         if (!state.rekeningLoading) loadRekeningBergerak({ automatic: true });
+      } else if (!$('p-dashboard').hidden && state.dashboardPage === 'progress') {
+        if (!state.progressLoading) loadProgresHarian({ automatic: true });
       } else if (state.data && !state.loading) loadDash({ automatic: true });
     }
   });
