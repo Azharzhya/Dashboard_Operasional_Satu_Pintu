@@ -7,7 +7,7 @@
 <meta name="color-scheme" content="light">
 <meta name="robots" content="noindex, nofollow">
 <meta name="description" content="Portal data operasional untuk karyawan terdaftar.">
-<title>Dashboard Operasional</title>
+<title>Dashboard Operasional Satu Pintu</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230a7a5a'/%3E%3Crect x='7' y='20' width='18' height='4' rx='2' fill='%23f6c915'/%3E%3Crect x='7' y='8' width='11' height='4' rx='2' fill='%23fff'/%3E%3Crect x='7' y='14' width='18' height='4' rx='2' fill='%23fff' opacity='.55'/%3E%3C/svg%3E">
 
 <!-- Sambungan dini: menghemat waktu jabat tangan TLS sebelum permintaan pertama -->
@@ -87,7 +87,7 @@
 <!-- ================= Aplikasi ================= -->
 <section id="app" hidden>
   <header class="top">
-    <div class="brand"><i></i>Dashboard Operasional</div>
+    <div class="brand"><i></i>Dashboard Operasional Satu Pintu</div>
     <div class="who">
       <span class="avatar" id="uavatar" aria-hidden="true"></span>
       <div class="who-t"><b id="uname"></b><span class="chip" id="ulevel"></span></div>
@@ -120,11 +120,11 @@
     <!-- Dashboard: satu menu utama dengan dua sub-menu -->
     <div id="p-dashboard" role="tabpanel" aria-labelledby="t-dashboard">
       <nav class="setnav" aria-label="Sub menu Dashboard">
-        <button type="button" class="setnav-btn" data-dashpage="sum" aria-pressed="false">Ringkasan</button>
         <button type="button" class="setnav-btn" data-dashpage="progress" aria-pressed="false">Progres Harian</button>
         <button type="button" class="setnav-btn" data-dashpage="analisa" aria-pressed="false">Analisa Cabang</button>
         <button type="button" class="setnav-btn" data-dashpage="move" aria-pressed="true">Rekening Bergerak</button>
         <button type="button" class="setnav-btn" data-dashpage="dash" aria-pressed="false">Tool PAR</button>
+        <button type="button" class="setnav-btn" data-dashpage="sum" aria-pressed="false">Ringkasan</button>
       </nav>
 
       <!-- Dashboard: Rekening Bergerak (sub-menu default) -->
@@ -139,6 +139,7 @@
         <div class="dact">
           <button class="btn ghost" id="rb-ref" type="button"><span class="btn-icon" aria-hidden="true">↻</span><span class="btn-label">Muat ulang</span></button>
           <button class="btn fit" id="rb-xlsx" type="button" disabled><span class="btn-icon" aria-hidden="true">↓</span><span class="btn-label">Unduh Excel</span></button>
+          <button class="btn ghost" id="rb-img" type="button" disabled><span class="btn-icon" aria-hidden="true">▧</span><span class="btn-label">Gambar F4</span></button>
         </div>
       </div>
       <section class="rb-kpis" id="rb-kpis" aria-label="Indikator Rekening Bergerak">
@@ -205,6 +206,7 @@
         <div class="dact">
           <button class="btn ghost" id="dref" type="button"><span class="btn-icon" aria-hidden="true">↻</span><span class="btn-label">Muat ulang</span></button>
           <button class="btn fit" id="ddl" type="button" disabled><span class="btn-icon" aria-hidden="true">↓</span><span class="btn-label">Unduh Excel</span></button>
+          <button class="btn ghost" id="ddl-img" type="button" disabled><span class="btn-icon" aria-hidden="true">▧</span><span class="btn-label">Gambar F4</span></button>
         </div>
       </div>
 
@@ -280,6 +282,7 @@
           <div class="dact">
             <button class="btn ghost" id="ph-refresh" type="button"><span class="btn-icon" aria-hidden="true">↻</span><span class="btn-label">Muat ulang</span></button>
             <button class="btn fit" id="ph-export" type="button" disabled><span class="btn-icon" aria-hidden="true">↓</span><span class="btn-label">Unduh Excel</span></button>
+            <button class="btn ghost" id="ph-img" type="button" disabled><span class="btn-icon" aria-hidden="true">▧</span><span class="btn-label">Gambar F4</span></button>
           </div>
         </div>
 
@@ -394,6 +397,7 @@
           <div class="dact">
             <button class="btn ghost" id="an-refresh" type="button"><span class="btn-icon" aria-hidden="true">↻</span><span class="btn-label">Muat ulang</span></button>
             <button class="btn fit" id="an-export" type="button" disabled><span class="btn-icon" aria-hidden="true">↓</span><span class="btn-label">Unduh Excel</span></button>
+            <button class="btn ghost" id="an-img" type="button" disabled><span class="btn-icon" aria-hidden="true">▧</span><span class="btn-label">Gambar F4</span></button>
           </div>
         </div>
         <section class="an-filter-panel" aria-label="Filter Analisa Cabang">
@@ -426,7 +430,7 @@
       </nav>
       <section id="set-global" class="set-page">
       <form class="setbox" id="setform" novalidate>
-        <h2>Fitur: Penyesuaian Margin</h2>
+        <h2>Penyesuaian Margin</h2>
         <p>Persentase (N) yang ditambahkan ke Total Balance sebelum dikurangi simpanan sebagai pengganti "Margin" karena data tidak memuat Margin pasti, untuk Pelunasan &lt; 100.000, &lt; 200.000, &lt; 500.000 dan Pelunasan dari Simpanan. Rumus: Total Balance + (Total Balance &times; N%). Pelunasan Tanpa Margin tidak terpengaruh.</p>
         <div class="setrow">
           <label for="mval">N (%)</label>
@@ -438,7 +442,7 @@
       </form>
 
       <form class="setbox" id="wjform" novalidate>
-        <h2>Fitur: Simpanan Wajib</h2>
+        <h2>Simpanan Wajib</h2>
         <p>Centang kategori yang ikut menghitung Simp. Wajib (sudah dikurangi 2.000). Kategori yang tidak dicentang tidak memakai Simp. Wajib. Setiap kategori memakai pilihannya sendiri, jadi satu pinjaman bisa masuk kategori yang berbeda.</p>
         <fieldset class="wjlist" id="wjlist"><legend class="sr-only">Kategori yang menghitung Simp. Wajib</legend></fieldset>
         <div class="setrow"><button class="btn fit" id="wjsave" type="submit" disabled>Simpan</button></div>
@@ -447,7 +451,7 @@
       </form>
 
       <form class="setbox" id="rb-setting-form" novalidate>
-        <h2>Fitur: Rekening PAR Bergerak</h2>
+        <h2>Rekening PAR Bergerak</h2>
         <p>Tentukan tanggal N sebagai batas Rekening Bergerak. Rekening dihitung bergerak bila nilai Trans Pinj Terakhir pada Data_Upload lebih dari atau sama dengan tanggal ini. Tahun pada judul kolom mengikuti tahun tanggal N.</p>
         <div class="setrow">
           <label for="rb-setting-date">Tanggal N</label>
@@ -461,7 +465,7 @@
 
       <section id="set-wilayah" class="set-page" hidden>
         <div class="wilayah-intro">
-          <h2>Fitur: Wilayah Kerja</h2>
+          <h2>Wilayah Kerja</h2>
           <p>Atur cabang yang boleh dilihat setiap akun. Centang cabang pada user terpilih, lalu simpan. Perubahan berlaku pada Dashboard, Ringkasan, dan file Excel yang diunduh dari akun tersebut.</p>
         </div>
         <div class="wilayah-layout">
@@ -497,10 +501,10 @@
     <!-- Unggah Excel (ADMINISTRATOR) -->
     <div id="p-up" role="tabpanel" aria-labelledby="t-up" hidden>
       <h1 class="ph">Unggah Excel</h1>
-      <p class="lead">Satu pintu untuk dua proses: gunakan nama <b>PAR 30-10-2026.xlsx</b> atau <b>Analisa 30-10-2026.xlsx</b> (tanggal wajib dd-mm-yyyy). PAR menjalankan pemeriksaan Loan No dan pembaruan Data_Upload; Analisa menyimpan data ke sheet Analisa tanpa mengubah Data_Upload.</p>
+      <p class="lead">Satu pintu untuk semua data</p>
       <label class="drop" id="drop" for="file">
         <b>Pilih file Excel</b>
-        <span>atau seret file ke sini · .xls / .xlsx</span>
+        <span>atau seret file ke sini file .xls or .xlsx</span>
       </label>
       <input id="file" type="file" accept=".xlsx,.xls" hidden>
       <div id="upinfo" hidden>
@@ -527,19 +531,19 @@
         <div>
           <div class="eyebrow"><span class="eyebrow-dot"></span> RIWAYAT PEMBARUAN APLIKASI</div>
           <h1 class="ph">Versi &amp; Changelog</h1>
-          <p class="lead">Catatan fitur, penyempurnaan, dan perbaikan PAR Web Tool dari fondasi awal hingga rilis saat ini.</p>
+          <p class="lead">Catatan fitur, penyempurnaan, dan perbaikan Dashboard Operasional Satu Pintu dari fondasi awal hingga rilis saat ini.</p>
         </div>
-        <span class="version-current"><i></i> Versi saat ini <b>v10.11</b></span>
+        <span class="version-current"><i></i> Versi saat ini <b>v.20.02</b></span>
       </div>
 
       <section class="version-overview" aria-label="Ringkasan versi saat ini">
         <div class="version-overview-main">
           <span class="version-overview-label">RILIS TERBARU</span>
-          <strong>Dashboard Modern v10.11</strong>
-          <p>Perbaikan tab rekap dan daftar detail per Loan No untuk PAR Baru dan PAR Selesai.</p>
+          <strong>Dashboard Operasional Satu Pintu v.20.02</strong>
+          <p>Ekspor ringkasan Dashboard menjadi gambar PNG ukuran F4 untuk dibagikan ke grup.</p>
         </div>
-        <div class="version-overview-stat"><strong>10.11</strong><span>Versi terbaru</span></div>
-        <div class="version-overview-stat"><strong>18</strong><span>Catatan rilis &amp; fondasi</span></div>
+        <div class="version-overview-stat"><strong>20.02</strong><span>Versi terbaru</span></div>
+        <div class="version-overview-stat"><strong>20 + 1</strong><span>Catatan rilis &amp; fondasi</span></div>
       </section>
 
       <div class="version-toolbar">
@@ -549,7 +553,24 @@
 
       <div id="version-list" class="version-list">
         <details class="version-item" open>
-          <summary><span class="version-marker latest">10.11</span><span class="version-summary"><b>Dashboard Modern v10.11</b><small>Daftar detail PAR Baru dan PAR Selesai per Loan No</small></span><span class="version-tag">DASHBOARD</span></summary>
+          <summary><span class="version-marker latest">20.02</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.02</b><small>Warna grafik Progres Harian dan percepatan daftar Loan No</small></span><span class="version-tag">DASHBOARD</span></summary>
+          <div class="version-body"><ul>
+            <li>Warna grafik line with marker diseragamkan: PAR Baru merah dan PAR Selesai hijau, termasuk legenda, penanda, tooltip, serta grafik pada ekspor Gambar F4.</li>
+            <li>Daftar PAR Baru dan PAR Selesai menyimpan halaman yang sudah dimuat di cache browser dan menyiapkan tab pasangannya di latar belakang. Perpindahan tab yang datanya sudah tersedia tampil langsung tanpa meminta sinkronisasi ulang.</li>
+            <li>Cache detail otomatis diperbarui saat data Progres Harian atau filter berubah; validasi akses dan penyaringan data tetap dilakukan oleh server.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">20.00</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.00</b><small>Ekspor ringkasan Dashboard menjadi gambar F4</small></span><span class="version-tag">DASHBOARD</span></summary>
+          <div class="version-body"><ul>
+            <li>Tombol Gambar F4 ditambahkan di samping Unduh Excel pada Rekening Bergerak, Tool PAR, Progres Harian, dan Analisa Cabang.</li>
+            <li>Gambar PNG disusun ulang sebagai kartu informasi dan tabel agar mudah dibaca ketika dibagikan melalui grup.</li>
+            <li>Ringkasan mengikuti periode, filter, cakupan Wilayah Kerja, kategori, serta tampilan tabel yang sedang aktif.</li>
+            <li>Ekspor gambar berjalan langsung di browser tanpa mengirim ulang data ke layanan pihak ketiga. Excel tetap tersedia untuk rincian lengkap.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">19.00</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.19.00</b><small>Daftar detail PAR Baru dan PAR Selesai per Loan No</small></span><span class="version-tag">DASHBOARD</span></summary>
           <div class="version-body"><ul>
             <li>Tab PAR Baru dan PAR Selesai diperbaiki agar hanya tab aktif yang berwarna hijau; tab nonaktif tetap putih.</li>
             <li>Tabel Rincian per Cabang kini menampilkan daftar setiap Loan No, bukan hanya total agregasi cabang.</li>
@@ -558,7 +579,7 @@
           </ul></div>
         </details>
         <details class="version-item">
-          <summary><span class="version-marker">10.10</span><span class="version-summary"><b>Dashboard Modern v10.10</b><small>Tombol perpindahan rekap PAR Baru dan PAR Selesai</small></span><span class="version-tag">DASHBOARD</span></summary>
+          <summary><span class="version-marker">18.00</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.18.00</b><small>Rekap PAR Baru dan PAR Selesai per cabang versi 2</small></span><span class="version-tag">DASHBOARD</span></summary>
           <div class="version-body"><ul>
             <li>Dua tabel rekap pada bagian bawah Progres Harian disajikan melalui tab PAR Baru dan PAR Selesai agar pengguna dapat berpindah tanpa memenuhi layar dengan dua tabel sekaligus.</li>
             <li>PAR Baru menjadi tab awal; pengguna dapat berpindah ke PAR Selesai melalui tombol di area rekap.</li>
@@ -567,7 +588,7 @@
           </ul></div>
         </details>
         <details class="version-item">
-          <summary><span class="version-marker">10.9</span><span class="version-summary"><b>Dashboard Modern v10.9</b><small>Tabel rekap PAR Baru dan PAR Selesai per cabang</small></span><span class="version-tag">DASHBOARD</span></summary>
+          <summary><span class="version-marker">17.00</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.17.00</b><small>Rekap PAR Baru dan PAR Selesai per cabang versi 1</small></span><span class="version-tag">DASHBOARD</span></summary>
           <div class="version-body"><ul>
             <li>Dua tabel rekap lengkap ditambahkan pada bagian bawah Progres Harian: PAR Baru dan PAR Selesai.</li>
             <li>Setiap tabel menampilkan urutan cabang, jumlah Client PAR berdasarkan Loan No, dan akumulasi Out. PAR dari Total Balance.</li>
@@ -577,7 +598,7 @@
           </ul></div>
         </details>
         <details class="version-item">
-          <summary><span class="version-marker">10.8</span><span class="version-summary"><b>Dashboard Modern v10.8</b><small>Filter Progres Harian per cabang, tanggal, dan Branch Coordinator</small></span><span class="version-tag">DASHBOARD</span></summary>
+          <summary><span class="version-marker">16.00</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.16.00</b><small>Penambahan Filter Progres Harian</small></span><span class="version-tag">DASHBOARD</span></summary>
           <div class="version-body"><ul>
             <li>Filter Cabang, Tanggal Progress, dan User dengan jabatan BRANCH COORDINATOR ditambahkan pada Progres Harian.</li>
             <li>Pilihan cabang, tanggal, dan Branch Coordinator dibatasi server-side berdasarkan Wilayah_Kerja akun yang login.</li>
@@ -586,7 +607,7 @@
           </ul></div>
         </details>
         <details class="version-item">
-          <summary><span class="version-marker">10.7</span><span class="version-summary"><b>Dashboard Modern v10.7</b><small>Validasi password awal dan penggantian wajib</small></span><span class="version-tag">KEAMANAN</span></summary>
+          <summary><span class="version-marker">15.00</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.15.00</b><small>Validasi password awal dan penggantian wajib</small></span><span class="version-tag">SYSTEM</span></summary>
           <div class="version-body"><ul>
             <li>Setelah NIK dan password berhasil diverifikasi, akun yang masih menggunakan password awal <code>komida2022!</code> diarahkan ke halaman Ganti Password.</li>
             <li>Pengguna belum memperoleh token Dashboard sebelum password baru berhasil disimpan.</li>
@@ -598,7 +619,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">10.6</span><span class="version-summary"><b>Dashboard Modern v10.6</b><small>Menu Versi &amp; Changelog</small></span><span class="version-tag">DOKUMENTASI</span></summary>
+          <summary><span class="version-marker">14.00</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.14.00</b><small>Menu Versi &amp; Changelog</small></span><span class="version-tag">VERSI &amp; CHANGELOG</span></summary>
           <div class="version-body"><ul>
             <li>Menu Versi &amp; Changelog ditambahkan dan dapat dibuka semua tingkat pengguna.</li>
             <li>Riwayat pembaruan dari fondasi aplikasi hingga v10.5 dirangkum per rilis, dapat dibuka/tutup, dan dicari.</li>
@@ -606,7 +627,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">10.5</span><span class="version-summary"><b>Dashboard Modern v10.5</b><small>Filter Analisa Cabang disederhanakan</small></span><span class="version-tag">TERBARU</span></summary>
+          <summary><span class="version-marker">13.00</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.13.00</b><small>Filter Analisa Cabang disederhanakan</small></span><span class="version-tag">DASHBOARD</span></summary>
           <div class="version-body"><ul>
             <li>Filter Tahun dan Bulan dihapus dari Analisa Cabang.</li>
             <li>Filter yang tersisa hanya Cabang, Tanggal Analisa, dan Bandingkan dengan.</li>
@@ -617,7 +638,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">10.4</span><span class="version-summary"><b>Dashboard Modern v10.4</b><small>Format tanggal Analisa Cabang</small></span><span class="version-tag">UI</span></summary>
+          <summary><span class="version-marker">12.00</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.12.00</b><small>Format tanggal Analisa Cabang</small></span><span class="version-tag">DASHBOARD</span></summary>
           <div class="version-body"><ul>
             <li>Dropdown Tanggal Analisa dan Bandingkan dengan menampilkan tanggal dalam format <code>yyyy mmm dd</code>.</li>
             <li>Nilai tanggal internal tetap <code>yyyy-MM-dd</code> agar pengurutan dan validasi periode tetap akurat.</li>
@@ -625,7 +646,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">10.3</span><span class="version-summary"><b>Dashboard Modern v10.3</b><small>Detail nilai perbandingan Analisa</small></span><span class="version-tag">ANALISA</span></summary>
+          <summary><span class="version-marker">11.00</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.11.00</b><small>Detail nilai perbandingan Analisa</small></span><span class="version-tag">DASHBOARD</span></summary>
           <div class="version-body"><ul>
             <li>Delapan kartu indikator menampilkan nilai periode terbaru dan nilai periode pembanding.</li>
             <li>Setiap kartu menampilkan perubahan nominal/jumlah dan persentase perubahan.</li>
@@ -635,7 +656,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">10.2</span><span class="version-summary"><b>Dashboard Modern v10.2</b><small>Validasi urutan tanggal perbandingan</small></span><span class="version-tag">ANALISA</span></summary>
+          <summary><span class="version-marker">10.00</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.10.00</b><small>Validasi urutan tanggal perbandingan</small></span><span class="version-tag">DASHBOARD</span></summary>
           <div class="version-body"><ul>
             <li>Perbandingan wajib bergerak dari tanggal lama ke tanggal terbaru.</li>
             <li>Dropdown pembanding hanya menampilkan tanggal sebelum periode analisa utama.</li>
@@ -645,7 +666,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">10.1</span><span class="version-summary"><b>Dashboard Modern v10.1</b><small>Koreksi header Excel Analisa</small></span><span class="version-tag">UPLOAD</span></summary>
+          <summary><span class="version-marker">09.00</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.09.00</b><small>Koreksi header Excel Analisa</small></span><span class="version-tag">UNGGAH EXCEL</span></summary>
           <div class="version-body"><ul>
             <li>Validasi header sumber diperbarui mengikuti nama yang benar: <code>Name</code>, <code>Outs. Loan</code>, <code>Tot. Sav. Balance</code>, <code>Memb. PAR</code>, dan <code>Outs. PAR</code>.</li>
             <li>Nama kolom tujuan di sheet Analisa tetap konsisten, sehingga dashboard tidak perlu mengubah struktur datanya.</li>
@@ -654,7 +675,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">10.0</span><span class="version-summary"><b>Dashboard Modern v10 — Analisa Cabang</b><small>Upload multi-fungsi dan dashboard Analisa</small></span><span class="version-tag">FITUR BARU</span></summary>
+          <summary><span class="version-marker">08.00</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.08.00</b><small>Upload multi-fungsi dan dashboard Analisa</small></span><span class="version-tag">DASHBOARD</span></summary>
           <div class="version-body"><ul>
             <li>Satu menu Unggah Excel mendeteksi jenis proses melalui nama file: <code>PAR dd-mm-yyyy</code> atau <code>Analisa dd-mm-yyyy</code>.</li>
             <li>File Analisa membaca header baris 4 dan data baris 5–22, lalu memetakan indikator ke sheet <code>Analisa</code>.</li>
@@ -666,7 +687,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">9</span><span class="version-summary"><b>Dashboard Modern v9 — Progres Harian</b><small>Monitoring PAR Baru dan PAR Selesai</small></span><span class="version-tag">DASHBOARD</span></summary>
+          <summary><span class="version-marker">07.00</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.07.00</b><small>Monitoring PAR Baru dan PAR Selesai</small></span><span class="version-tag">DASHBOARD</span></summary>
           <div class="version-body"><ul>
             <li>Dashboard Progres Harian menggunakan arsip sheet PAR Baru dan PAR Selesai berdasarkan Tanggal Progress pada bulan berjalan.</li>
             <li>Kartu total kenaikan dan penyelesaian Out. PAR serta Client PAR ditambahkan.</li>
@@ -677,7 +698,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">8</span><span class="version-summary"><b>Dashboard Modern v8</b><small>Tanggal Progress untuk arsip PAR</small></span><span class="version-tag">ARSIP</span></summary>
+          <summary><span class="version-marker">06.00</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.06.00</b><small>Tanggal Progress untuk arsip PAR</small></span><span class="version-tag">SYSTEM</span></summary>
           <div class="version-body"><ul>
             <li>Sheet PAR Baru dan PAR Selesai mempertahankan data lama dengan metode append.</li>
             <li>Kolom Tanggal Progress diisi pada setiap baris arsip berdasarkan tanggal pemeriksaan.</li>
@@ -687,7 +708,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">7</span><span class="version-summary"><b>Dashboard Modern v7</b><small>Pengecualian batas sinkron untuk Administrator</small></span><span class="version-tag">AKSES</span></summary>
+          <summary><span class="version-marker">05.00</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.05.00</b><small>Pengecualian batas sinkron</small></span><span class="version-tag">SYSTEM</span></summary>
           <div class="version-body"><ul>
             <li>Akun ADMINISTRATOR dikecualikan dari batas tiga kali sinkron otomatis per sesi.</li>
             <li>Administrator tetap dapat melakukan sinkron otomatis berkala tanpa logout paksa.</li>
@@ -696,7 +717,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">6</span><span class="version-summary"><b>Dashboard Modern v6</b><small>Pemeriksaan PAR Baru dan PAR Selesai</small></span><span class="version-tag">UPLOAD</span></summary>
+          <summary><span class="version-marker">04.00</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.04.00</b><small>Pemeriksaan PAR Baru dan PAR Selesai</small></span><span class="version-tag">UNGGAH EXCEL</span></summary>
           <div class="version-body"><ul>
             <li>LOAN NO pada Excel dibandingkan dengan Data_Upload untuk menemukan rekening baru dan rekening yang selesai.</li>
             <li>Baris lengkap sumber disalin ke sheet PAR Baru dan PAR Selesai.</li>
@@ -706,7 +727,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">5</span><span class="version-summary"><b>Dashboard Modern v5</b><small>Batas sinkron otomatis per sesi pengguna</small></span><span class="version-tag">SISTEM</span></summary>
+          <summary><span class="version-marker">03.00</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.03.00</b><small>Batas sinkron otomatis per sesi pengguna</small></span><span class="version-tag">SYSTEM</span></summary>
           <div class="version-body"><ul>
             <li>Sinkron otomatis dibatasi tiga kali per sesi login.</li>
             <li>Sebelum request otomatis keempat, sesi dibersihkan dan halaman dikembalikan ke Login.</li>
@@ -716,7 +737,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">4</span><span class="version-summary"><b>Dashboard Modern v4</b><small>Penyegaran UI dan pengalaman penggunaan</small></span><span class="version-tag">UI</span></summary>
+          <summary><span class="version-marker">02.00</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.02.00</b><small>Penyegaran UI dan pengalaman penggunaan</small></span><span class="version-tag">DASHBOARD</span></summary>
           <div class="version-body"><ul>
             <li>UI diperbarui dengan pendekatan Clean Modern Dashboard dan Material Design.</li>
             <li>Sidebar desktop dan navigasi bawah untuk Android ditambahkan.</li>
@@ -726,7 +747,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">Dasar</span><span class="version-summary"><b>Fondasi aplikasi &amp; Dashboard Terpadu</b><small>Fitur inti sebelum rangkaian Dashboard Modern</small></span><span class="version-tag">FONDASI</span></summary>
+          <summary><span class="version-marker">01.00</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.01.00</b><small>Dashboard Operasional Satu Pintu</small></span><span class="version-tag">FONDASI</span></summary>
           <div class="version-body"><ul>
             <li>Dashboard Tool PAR, autentikasi pengguna, tingkat akses, dan pengaturan Wilayah Kerja dipertahankan sebagai fondasi aplikasi.</li>
             <li>Dashboard Rekening Bergerak ditambahkan untuk rekap per cabang dan Branch Coordinator berdasarkan tanggal N yang diatur Administrator/User 0.</li>
@@ -736,7 +757,7 @@
         </details>
       </div>
       <p id="version-empty" class="version-empty" hidden>Tidak ada catatan versi yang cocok dengan pencarian.</p>
-      <p class="version-footnote">Catatan ini merangkum pembaruan fitur yang tercatat pada PAR Web Tool. Fitur dan akses yang tersedia tetap mengikuti tingkat akun pengguna.</p>
+      <p class="version-footnote">Catatan ini merangkum pembaruan fitur yang tercatat pada Dashboard Operasional Satu Pintu. Fitur dan akses yang tersedia tetap mengikuti tingkat akun pengguna.</p>
     </div>
   </main>
 </section>

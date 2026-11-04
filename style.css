@@ -782,10 +782,10 @@ th.num .th{flex-direction:row-reverse}
 .ph-chart-panel{overflow:hidden}
 .ph-legend{display:flex;gap:16px;flex-wrap:wrap;margin:0 0 8px;color:var(--mute);font-size:9px;font-weight:700}
 .ph-legend span{display:inline-flex;align-items:center;gap:6px}
-.ph-legend i{position:relative;display:inline-block;width:20px;height:2px;border-radius:2px;background:#0a7a5a}
-.ph-legend i::after{content:'';position:absolute;left:50%;top:50%;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;background:#0a7a5a;border:1.5px solid #fff;box-sizing:border-box}
-.ph-legend i.done{background:#d99e00}
-.ph-legend i.done::after{background:#d99e00;border-radius:2px;transform:rotate(45deg)}
+.ph-legend i{position:relative;display:inline-block;width:20px;height:2px;border-radius:2px;background:#DC3545}
+.ph-legend i::after{content:'';position:absolute;left:50%;top:50%;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;background:#DC3545;border:1.5px solid #fff;box-sizing:border-box}
+.ph-legend i.done{background:#198754}
+.ph-legend i.done::after{background:#198754;border-radius:2px;transform:rotate(45deg)}
 .ph-chart-host{position:relative;min-width:0;min-height:240px}
 .ph-chart-svg{display:block;width:100%;height:auto;touch-action:pan-y;user-select:none;-webkit-user-select:none;overflow:visible}
 .ph-chart-tip{position:absolute;top:8px;z-index:3;min-width:150px;padding:8px 10px;border:1px solid var(--line-2);border-radius:10px;background:#fff;box-shadow:0 6px 18px rgba(6,78,59,.14);font-size:10px;color:var(--ink);pointer-events:none}
@@ -794,10 +794,10 @@ th.num .th{flex-direction:row-reverse}
 .ph-tip-row{display:flex;align-items:center;gap:7px;line-height:1.7}
 .ph-tip-row span:nth-child(2){flex:1;color:var(--mute);font-weight:600}
 .ph-tip-val{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
-.ph-tip-row i{position:relative;display:inline-block;width:12px;height:2px;border-radius:2px;background:#0a7a5a}
-.ph-tip-row i::after{content:'';position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:#0a7a5a;border:1.2px solid #fff;box-sizing:border-box}
-.ph-tip-row i.done{background:#d99e00}
-.ph-tip-row i.done::after{background:#d99e00;border-radius:1.5px;transform:rotate(45deg)}
+.ph-tip-row i{position:relative;display:inline-block;width:12px;height:2px;border-radius:2px;background:#DC3545}
+.ph-tip-row i::after{content:'';position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:#DC3545;border:1.2px solid #fff;box-sizing:border-box}
+.ph-tip-row i.done{background:#198754}
+.ph-tip-row i.done::after{background:#198754;border-radius:1.5px;transform:rotate(45deg)}
 .ph-tip-row.net{margin-top:3px;padding-top:4px;border-top:1px solid var(--line)}
 .ph-tip-gap{display:inline-block;width:12px}
 .ph-topup-panel{margin-bottom:12px}
@@ -997,7 +997,7 @@ th.num .th{flex-direction:row-reverse}
 .ph-detail-pager .pnav span{min-width:86px}
 @media(max-width:760px){.ph-detail-pager{align-items:stretch;gap:8px}.ph-detail-pager .pnav{width:100%;justify-content:space-between}.ph-detail-pager .pnav .btn{min-height:38px;padding:0 10px}.ph-detail-pager .pnav span{min-width:72px;font-size:11px}}
 
-/* Tombol aksi header (Muat ulang + Unduh Excel) disamakan di semua menu Dashboard.
+/* Tombol aksi header (Muat ulang + Unduh Excel + Gambar F4) disamakan di semua menu Dashboard.
    Posisi dikunci di pojok kanan atas header dan ukuran tombol tetap, jadi tidak bergeser
    saat teks judul, keterangan, atau status sinkronisasi berubah. */
 .dhead{flex-wrap:nowrap;align-items:flex-start;justify-content:space-between;gap:20px}
@@ -1009,6 +1009,12 @@ th.num .th{flex-direction:row-reverse}
 .dhead>.dact .btn.fit:disabled{box-shadow:none}
 .dhead>.dact .btn-icon{display:inline-flex;align-items:center;justify-content:center;flex:none;width:16px;height:16px;font-size:16px;line-height:1}
 .dhead>.dact .btn-label{display:inline-block}
+@media(max-width:980px) and (min-width:761px){
+  .dhead{flex-wrap:wrap;gap:12px}
+  .dhead>.dact{order:-1;flex:1 1 100%;width:100%;justify-content:stretch}
+  .dhead>.dact .btn{flex:1 1 0;width:auto;min-width:0;max-width:none;padding:0 10px}
+  .dhead>:first-child{flex:1 1 100%}
+}
 @media(max-width:760px){
   .dhead{flex-wrap:wrap;gap:12px}
   .dhead>.dact{order:-1;flex:1 1 100%;width:100%;gap:8px}
