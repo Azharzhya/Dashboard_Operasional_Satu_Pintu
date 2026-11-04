@@ -139,7 +139,7 @@
         <div class="dact">
           <button class="btn ghost" id="rb-ref" type="button"><span class="btn-icon" aria-hidden="true">↻</span><span class="btn-label">Muat ulang</span></button>
           <button class="btn fit" id="rb-xlsx" type="button" disabled><span class="btn-icon" aria-hidden="true">↓</span><span class="btn-label">Unduh Excel</span></button>
-          <button class="btn ghost" id="rb-img" type="button" disabled><span class="btn-icon" aria-hidden="true">▧</span><span class="btn-label">Gambar F4</span></button>
+          <button class="btn ghost image-download-btn" id="rb-img" type="button" disabled hidden><span class="btn-icon" aria-hidden="true">▧</span><span class="btn-label">Gambar F4</span></button>
         </div>
       </div>
       <section class="rb-kpis" id="rb-kpis" aria-label="Indikator Rekening Bergerak">
@@ -206,7 +206,7 @@
         <div class="dact">
           <button class="btn ghost" id="dref" type="button"><span class="btn-icon" aria-hidden="true">↻</span><span class="btn-label">Muat ulang</span></button>
           <button class="btn fit" id="ddl" type="button" disabled><span class="btn-icon" aria-hidden="true">↓</span><span class="btn-label">Unduh Excel</span></button>
-          <button class="btn ghost" id="ddl-img" type="button" disabled><span class="btn-icon" aria-hidden="true">▧</span><span class="btn-label">Gambar F4</span></button>
+          <button class="btn ghost image-download-btn" id="ddl-img" type="button" disabled hidden><span class="btn-icon" aria-hidden="true">▧</span><span class="btn-label">Gambar F4</span></button>
         </div>
       </div>
 
@@ -282,7 +282,7 @@
           <div class="dact">
             <button class="btn ghost" id="ph-refresh" type="button"><span class="btn-icon" aria-hidden="true">↻</span><span class="btn-label">Muat ulang</span></button>
             <button class="btn fit" id="ph-export" type="button" disabled><span class="btn-icon" aria-hidden="true">↓</span><span class="btn-label">Unduh Excel</span></button>
-            <button class="btn ghost" id="ph-img" type="button" disabled><span class="btn-icon" aria-hidden="true">▧</span><span class="btn-label">Gambar F4</span></button>
+            <button class="btn ghost image-download-btn" id="ph-img" type="button" disabled hidden><span class="btn-icon" aria-hidden="true">▧</span><span class="btn-label">Gambar F4 Landscape</span></button>
           </div>
         </div>
 
@@ -397,7 +397,7 @@
           <div class="dact">
             <button class="btn ghost" id="an-refresh" type="button"><span class="btn-icon" aria-hidden="true">↻</span><span class="btn-label">Muat ulang</span></button>
             <button class="btn fit" id="an-export" type="button" disabled><span class="btn-icon" aria-hidden="true">↓</span><span class="btn-label">Unduh Excel</span></button>
-            <button class="btn ghost" id="an-img" type="button" disabled><span class="btn-icon" aria-hidden="true">▧</span><span class="btn-label">Gambar F4</span></button>
+            <button class="btn ghost image-download-btn" id="an-img" type="button" disabled hidden><span class="btn-icon" aria-hidden="true">▧</span><span class="btn-label">Gambar F4</span></button>
           </div>
         </div>
         <section class="an-filter-panel" aria-label="Filter Analisa Cabang">
@@ -427,6 +427,7 @@
       <nav class="setnav" aria-label="Sub menu Setting">
         <button type="button" class="setnav-btn" data-setpage="global" aria-pressed="true">Pengaturan Dashboard</button>
         <button type="button" class="setnav-btn" data-setpage="wilayah" aria-pressed="false">Wilayah Kerja</button>
+        <button type="button" class="setnav-btn" id="setnav-enable-download" data-setpage="enable-download" aria-pressed="false" hidden>Enable Download</button>
       </nav>
       <section id="set-global" class="set-page">
       <form class="setbox" id="setform" novalidate>
@@ -461,6 +462,17 @@
         <p class="sync">Nilai saat ini: <b id="rb-setting-current">Belum diatur</b></p>
         <p id="rb-setting-msg" class="note" role="status"></p>
       </form>
+      </section>
+
+      <section id="set-enable-download" class="set-page" hidden>
+        <form class="setbox" id="image-download-form" novalidate>
+          <h2>Enable Download</h2>
+          <p>Atur tingkat akun yang boleh menggunakan tombol <b>Gambar F4</b> pada Dashboard. Administrator selalu memiliki akses dan tidak perlu dicentang. Perubahan ini hanya mengatur unduh gambar, bukan unduh Excel. Pengguna yang sedang aktif perlu memuat ulang aplikasi agar perubahan terbaru diterapkan.</p>
+          <fieldset class="wjlist" id="image-download-level-list"><legend class="sr-only">Tingkat pengguna yang diizinkan mengunduh gambar</legend></fieldset>
+          <div class="setrow"><button class="btn fit" id="image-download-save" type="submit" disabled>Simpan Enable Download</button></div>
+          <p class="sync">Saat ini diizinkan: <b id="image-download-current">Administrator</b></p>
+          <p id="image-download-msg" class="note" role="status"></p>
+        </form>
       </section>
 
       <section id="set-wilayah" class="set-page" hidden>
@@ -533,16 +545,16 @@
           <h1 class="ph">Versi &amp; Changelog</h1>
           <p class="lead">Catatan fitur, penyempurnaan, dan perbaikan Dashboard Operasional Satu Pintu dari fondasi awal hingga rilis saat ini.</p>
         </div>
-        <span class="version-current"><i></i> Versi saat ini <b>v.20.02</b></span>
+        <span class="version-current"><i></i> Versi saat ini <b>v.20.05</b></span>
       </div>
 
       <section class="version-overview" aria-label="Ringkasan versi saat ini">
         <div class="version-overview-main">
           <span class="version-overview-label">RILIS TERBARU</span>
-          <strong>Dashboard Operasional Satu Pintu v.20.02</strong>
-          <p>Ekspor ringkasan Dashboard menjadi gambar PNG ukuran F4 untuk dibagikan ke grup.</p>
+          <strong>Dashboard Operasional Satu Pintu v.20.05</strong>
+          <p>Hak akses tombol Gambar F4 berdasarkan tingkat akun, dengan pengaturan Enable Download khusus Administrator.</p>
         </div>
-        <div class="version-overview-stat"><strong>20.02</strong><span>Versi terbaru</span></div>
+        <div class="version-overview-stat"><strong>20.05</strong><span>Versi terbaru</span></div>
         <div class="version-overview-stat"><strong>20 + 1</strong><span>Catatan rilis &amp; fondasi</span></div>
       </section>
 
@@ -553,7 +565,34 @@
 
       <div id="version-list" class="version-list">
         <details class="version-item" open>
-          <summary><span class="version-marker latest">20.02</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.02</b><small>Warna grafik Progres Harian dan percepatan daftar Loan No</small></span><span class="version-tag">DASHBOARD</span></summary>
+          <summary><span class="version-marker latest">20.05</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.05</b><small>Pengaturan hak akses Download Gambar F4 berdasarkan tingkat akun</small></span><span class="version-tag">AKSES</span></summary>
+          <div class="version-body"><ul>
+            <li>Tombol Gambar F4 pada Rekening Bergerak, Tool PAR, Progres Harian, dan Analisa Cabang secara default hanya tersedia bagi ADMINISTRATOR.</li>
+            <li>Submenu Setting &gt; Enable Download memungkinkan Administrator mengaktifkan akses secara terpisah untuk USER 0, USER 1, USER 2, dan USER 3.</li>
+            <li>Administrator selalu memiliki akses. Penyimpanan daftar tingkat yang diizinkan divalidasi ulang di server.</li>
+            <li>Pengaturan ini tidak mengubah hak akses unduh Excel maupun pembatasan Wilayah Kerja.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">20.04</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.04</b><small>Gradasi warna kartu ranking pada ekspor Progres Harian</small></span><span class="version-tag">DASHBOARD</span></summary>
+          <div class="version-body"><ul>
+            <li>Tiga kartu cabang dengan Kenaikan Tertinggi menggunakan gradasi merah berdasarkan peringkat: urutan pertama 50%, kedua 30%, dan ketiga 10%.</li>
+            <li>Tiga kartu cabang dengan Penyelesaian Tertinggi menggunakan gradasi hijau dengan intensitas 50%, 30%, dan 10%.</li>
+            <li>Urutan, nama cabang, jumlah Client PAR (Loan No), dan nilai Out. PAR tetap mengikuti data ranking Progres Harian yang sama seperti sebelumnya.</li>
+            <li>Perubahan hanya berlaku pada ekspor Gambar F4 Progres Harian; perhitungan dan tampilan Dashboard tidak diubah.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">20.03</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.03</b><small>Ekspor Progres Harian F4 landscape dengan tata letak 40:30:30</small></span><span class="version-tag">DASHBOARD</span></summary>
+          <div class="version-body"><ul>
+            <li>Ekspor Gambar Progres Harian diubah menjadi F4 landscape (330 × 210 mm) pada resolusi 300 DPI atau 3.898 × 2.480 piksel.</li>
+            <li>Komposisi gambar dibagi 40:30:30: kolom kiri berisi kartu PAR Baru, PAR Selesai, dan Selisih Out. PAR/Client PAR; kolom tengah berisi dua ranking cabang; kolom kanan berisi grafik Out. PAR dan Client.</li>
+            <li>Ukuran teks nilai utama, nama cabang, judul kartu, legenda, dan label grafik diperbesar agar lebih nyaman dibaca saat dibagikan atau dicetak.</li>
+            <li>Ekspor gambar halaman lain tidak diubah. Data Progres Harian tetap mengikuti filter aktif dan cakupan Wilayah Kerja.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">20.02</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.02</b><small>Warna grafik Progres Harian dan percepatan daftar Loan No</small></span><span class="version-tag">DASHBOARD</span></summary>
           <div class="version-body"><ul>
             <li>Warna grafik line with marker diseragamkan: PAR Baru merah dan PAR Selesai hijau, termasuk legenda, penanda, tooltip, serta grafik pada ekspor Gambar F4.</li>
             <li>Daftar PAR Baru dan PAR Selesai menyimpan halaman yang sudah dimuat di cache browser dan menyiapkan tab pasangannya di latar belakang. Perpindahan tab yang datanya sudah tersedia tampil langsung tanpa meminta sinkronisasi ulang.</li>

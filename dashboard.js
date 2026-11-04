@@ -271,6 +271,7 @@ function startProgress(label, expectWait, alive) {
    --------------------------------------------------------------------- */
 const state = {
   user: null, sessionToken: '', loadSeq: 0, loading: false, lastCheck: 0,
+  imageDownloadLevels: [], imageDownloadConfigLoaded: false, imageDownloadDirty: false, settingPage: 'global',
   data: null, byCat: {}, branches: new Map(), groups: {}, clientIdCounts: new Map(),
   cat: 'a', q: '', branch: '', staf: '', sort: { label: '', dir: 1 }, page: 0, size: 50, view: [],
   sumBy: 'branch', sumSort: { key: 'n', dir: -1 }, sumQ: '', wjDirty: false,
@@ -338,11 +339,44 @@ function paintUser(user) {
   $('uname').textContent = name;
   $('ulevel').textContent = user.tingkat || '';
   $('uavatar').textContent = name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+  paintImageDownloadControls();
+  paintImageDownloadSettings();
   $('t-set').hidden = !canSetting(user);
   if (!canSetting(user) && !$('p-set').hidden) selectTab('dashboard');
   $('t-up').hidden = user.tingkat !== 'ADMINISTRATOR';   // hanya tampilan; penegakan sebenarnya di server
   const mainNav = document.querySelector('#app>.tabs');
   if (mainNav) mainNav.style.setProperty('--nav-count', String(TABS.filter(k => !$('t-' + k).hidden).length));
+}
+
+const IMAGE_DOWNLOAD_USER_LEVELS = ['USER 0', 'USER 1', 'USER 2', 'USER 3'];
+function canDownloadImage() {
+  if (!state.user) return false;
+  if (state.user.tingkat === 'ADMINISTRATOR') return true;
+  return state.imageDownloadConfigLoaded && state.imageDownloadLevels.indexOf(state.user.tingkat) > -1;
+}
+function paintImageDownloadControls() {
+  const allowed = canDownloadImage();
+  document.querySelectorAll('.image-download-btn').forEach(button => { button.hidden = !allowed; });
+  const admin = !!state.user && state.user.tingkat === 'ADMINISTRATOR';
+  const nav = $('setnav-enable-download');
+  if (nav) nav.hidden = !admin;
+  if (!admin && state.settingPage === 'enable-download') setSettingPage('global');
+}
+function imageDownloadChecked() {
+  return IMAGE_DOWNLOAD_USER_LEVELS.filter(level => {
+    const input = document.querySelector('#image-download-level-list input[value="' + level + '"]');
+    return !!(input && input.checked);
+  });
+}
+function paintImageDownloadSettings() {
+  if (!$('image-download-level-list')) return;
+  const current = state.imageDownloadLevels || [];
+  if (!state.imageDownloadDirty) {
+    document.querySelectorAll('#image-download-level-list input').forEach(input => { input.checked = current.indexOf(input.value) > -1; });
+  }
+  $('image-download-current').textContent = current.length ? 'Administrator, ' + current.join(', ') : 'Administrator saja';
+  const same = imageDownloadChecked().join('|') === current.join('|');
+  $('image-download-save').disabled = !state.imageDownloadConfigLoaded || same || !state.user || state.user.tingkat !== 'ADMINISTRATOR';
 }
 
 // Dialog konfirmasi bawaan browser (<dialog>), pengganti confirm().
@@ -418,6 +452,7 @@ function logout(msg, forceRefresh) {
   stopAutoSync();
   initialPasswordChangeTicket = '';
   state.loadSeq++; state.loading = false; state.user = null; state.sessionToken = ''; state.data = null; state.byCat = {}; state.groups = {}; state.clientIdCounts = new Map(); state.wjDirty = false;
+  state.imageDownloadLevels = []; state.imageDownloadConfigLoaded = false; state.imageDownloadDirty = false; state.settingPage = 'global';
   session.clear();
   const cacheClear = cache.clear();
   state.wilayah = null; state.wilayahDraft = []; state.wilayahDrafts = Object.create(null); state.wilayahSelected = ''; setNote('wjmsg', '');
@@ -522,6 +557,7 @@ async function submitInitialPasswordChange(ev) {
 function enterApp(user) {
   state.user = user;
   state.sessionToken = (session.get() || {}).token || '';
+  state.imageDownloadLevels = []; state.imageDownloadConfigLoaded = false; state.imageDownloadDirty = false; state.settingPage = 'global';
   paintUser(user);
   state.cat = 'a'; state.q = ''; state.branch = ''; state.staf = ''; state.page = 0; state.sort = { label: '', dir: 1 };
   resetUpload(); setNote('setmsg', ''); setNote('wjmsg', ''); setNote('rb-setting-msg', ''); state.wjDirty = false;
@@ -604,6 +640,11 @@ async function loadDash(options) {
     return showLoadError(r.ok ? MSG_OLD_SERVER : r.error || 'Data dashboard gagal dimuat.');
   }
   state.lastCheck = Date.now();
+  state.imageDownloadConfigLoaded = Array.isArray(r.imageDownloadLevels);
+  state.imageDownloadLevels = state.imageDownloadConfigLoaded
+    ? IMAGE_DOWNLOAD_USER_LEVELS.filter(level => r.imageDownloadLevels.indexOf(level) > -1) : [];
+  paintImageDownloadControls();
+  paintImageDownloadSettings();
   if (r.user) { state.user = r.user; paintUser(r.user); const s = session.get(); if (s) session.set(Object.assign(s, { user: r.user })); }
   if (info) {
     const q = perf.get();
@@ -1692,14 +1733,80 @@ function imgFooter(ctx, note) {
 }
 
 function imgCompactMoney(value) { return rpShort(Number(value) || 0); }
-function imgDownload(canvas, filename) {
+
+function imgPngCrc32(bytes) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) {
+    crc ^= bytes[i];
+    for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ ((crc & 1) ? 0xEDB88320 : 0);
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+// Canvas PNG secara default menyimpan resolusi 96 DPI. Sisipkan/perbarui pHYs
+// agar file Progres Harian mempertahankan ukuran cetak F4 landscape pada 300 DPI.
+async function imgPngSetDpi(blob, dpi) {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+  if (bytes.length < 33 || !signature.every((v, i) => bytes[i] === v)) {
+    throw new Error('Format PNG tidak valid; metadata resolusi tidak dapat dipasang.');
+  }
+  const chunks = [];
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let offset = 8, hasPhys = false;
+  while (offset + 12 <= bytes.length) {
+    const length = view.getUint32(offset, false);
+    const end = offset + 12 + length;
+    if (end > bytes.length) throw new Error('Struktur PNG tidak lengkap.');
+    const type = String.fromCharCode(bytes[offset + 4], bytes[offset + 5], bytes[offset + 6], bytes[offset + 7]);
+    chunks.push({ type, bytes: bytes.slice(offset, end) });
+    if (type === 'pHYs') hasPhys = true;
+    offset = end;
+    if (type === 'IEND') break;
+  }
+  const pixelsPerMeter = Math.round(Number(dpi) / 0.0254);
+  const data = new Uint8Array(9), dataView = new DataView(data.buffer);
+  dataView.setUint32(0, pixelsPerMeter, false);
+  dataView.setUint32(4, pixelsPerMeter, false);
+  data[8] = 1; // unit = meter
+  const crcInput = new Uint8Array(13);
+  crcInput.set([112, 72, 89, 115], 0); // pHYs
+  crcInput.set(data, 4);
+  const chunk = new Uint8Array(21), chunkView = new DataView(chunk.buffer);
+  chunkView.setUint32(0, 9, false);
+  chunk.set(crcInput.subarray(0, 4), 4);
+  chunk.set(data, 8);
+  chunkView.setUint32(17, imgPngCrc32(crcInput), false);
+
+  const output = [bytes.slice(0, 8)];
+  let inserted = false;
+  chunks.forEach(item => {
+    if (item.type === 'pHYs') {
+      if (!inserted) output.push(chunk);
+      inserted = true;
+      return;
+    }
+    output.push(item.bytes);
+    if (item.type === 'IHDR' && !hasPhys && !inserted) {
+      output.push(chunk);
+      inserted = true;
+    }
+  });
+  if (!inserted) throw new Error('Metadata resolusi PNG gagal dipasang.');
+  return new Blob(output, { type: 'image/png' });
+}
+
+function imgDownload(canvas, filename, dpi) {
   return new Promise((resolve, reject) => {
     canvas.toBlob(blob => {
       if (!blob) return reject(new Error('Gambar gagal dibuat oleh browser.'));
-      const url = URL.createObjectURL(blob), link = document.createElement('a');
-      link.href = url; link.download = filename; document.body.appendChild(link); link.click(); link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1500);
-      resolve();
+      (async () => {
+        const output = dpi ? await imgPngSetDpi(blob, dpi) : blob;
+        const url = URL.createObjectURL(output), link = document.createElement('a');
+        link.href = url; link.download = filename; document.body.appendChild(link); link.click(); link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1500);
+        resolve();
+      })().catch(reject);
     }, 'image/png');
   });
 }
@@ -1840,6 +1947,231 @@ function imgDrawLineChart(ctx, x, y, width, height, daily, keyA, keyB, money, se
   ctx.textAlign = 'left';
 }
 
+/* ---------------------------------------------------------------------
+   Ekspor khusus Progres Harian: F4 landscape, 300 DPI, layout 40:30:30.
+   Hanya mengubah komposisi gambar; sumber angka tetap state.progress.
+   --------------------------------------------------------------------- */
+const PH_IMG_W = 3898;   // F4 landscape 330 mm @ 300 DPI
+const PH_IMG_H = 2480;   // F4 landscape 210 mm @ 300 DPI
+const PH_IMG_M = 96;
+const PH_IMG_G = 36;
+
+function phImgFont(ctx, size, weight) {
+  ctx.font = (weight || '400') + ' ' + size + 'px Arial, sans-serif';
+}
+
+function phImgFit(ctx, value, maxWidth, size, weight, minSize) {
+  const text = String(value == null ? '' : value);
+  let fontSize = size || 32;
+  const floor = minSize == null ? Math.max(20, Math.round(fontSize * 0.68)) : minSize;
+  while (fontSize > floor) {
+    phImgFont(ctx, fontSize, weight || '400');
+    if (ctx.measureText(text).width <= maxWidth) break;
+    fontSize -= 1;
+  }
+  phImgFont(ctx, fontSize, weight || '400');
+  return imgFitText(ctx, text, maxWidth);
+}
+
+function phImgText(ctx, value, x, y, maxWidth, size, color, weight, align, minSize) {
+  ctx.save();
+  ctx.fillStyle = color || '#263D33';
+  ctx.textAlign = align || 'left';
+  const text = phImgFit(ctx, value, maxWidth, size || 30, weight || '400', minSize);
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
+function phImgPanel(ctx, x, y, w, h, fill) {
+  imgRoundRect(ctx, x, y, w, h, 28, fill || '#FFFFFF', '#DCE8E0');
+}
+
+function phImgKpiCard(ctx, x, y, w, h, kind, amount, count) {
+  const isNew = kind === 'new';
+  const accent = isNew ? '#0A7A5A' : '#D09A20';
+  const soft = isNew ? '#E6F4EC' : '#FFF4D8';
+  const ink = isNew ? '#075B43' : '#815B0B';
+  const label = isNew ? 'PAR BARU · PENINGKATAN' : 'PAR SELESAI · PENYELESAIAN';
+  const mark = isNew ? '↑' : '✓';
+  phImgPanel(ctx, x, y, w, h);
+  ctx.save();
+  ctx.fillStyle = accent;
+  imgRoundRect(ctx, x + 28, y + 30, 12, h - 60, 6, accent);
+  imgRoundRect(ctx, x + w - 106, y + 30, 72, 72, 20, soft);
+  phImgFont(ctx, 52, '700'); ctx.fillStyle = ink; ctx.textAlign = 'center';
+  ctx.fillText(mark, x + w - 70, y + 82);
+  phImgText(ctx, label, x + 68, y + 83, w - 190, 37, ink, '700', 'left', 27);
+  phImgText(ctx, amount, x + 54, y + 275, w - 105, 78, '#123D2F', '700', 'left', 43);
+  phImgText(ctx, isNew ? 'Out. PAR bertambah' : 'Out. PAR terselesaikan', x + 56, y + 345, w - 110, 31, '#64766D', '400', 'left', 25);
+  ctx.strokeStyle = '#E3ECE6'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(x + 54, y + 405); ctx.lineTo(x + w - 48, y + 405); ctx.stroke();
+  phImgText(ctx, fmt(count), x + 56, y + 490, w - 110, 54, '#183C2F', '700', 'left', 35);
+  phImgText(ctx, 'Client PAR · jumlah Loan No', x + 56, y + 550, w - 110, 28, '#6B7E74', '400', 'left', 22);
+  ctx.fillStyle = soft;
+  imgRoundRect(ctx, x + 52, y + h - 94, w - 104, 54, 16, soft);
+  phImgText(ctx, isNew ? 'PENINGKATAN' : 'PENYELESAIAN', x + 76, y + h - 58, w - 152, 25, ink, '700', 'left', 21);
+  ctx.restore();
+}
+
+function phImgNetCard(ctx, x, y, w, h, d) {
+  phImgPanel(ctx, x, y, w, h, '#F5F9F6');
+  ctx.save();
+  ctx.fillStyle = '#D9A928'; imgRoundRect(ctx, x + 34, y + 34, 12, 70, 6, '#D9A928');
+  phImgText(ctx, 'SELISIH OUT. PAR & CLIENT PAR', x + 76, y + 82, w - 130, 49, '#123D2F', '700', 'left', 35);
+  phImgText(ctx, 'PAR Baru dikurangi PAR Selesai', x + 76, y + 132, w - 130, 29, '#6B7E74', '400', 'left', 23);
+
+  const pad = 38, gap = 24, innerX = x + pad, innerW = w - pad * 2;
+  const top = y + 190, blockH = Math.floor((h - 250) / 2);
+  const metrics = [
+    {
+      label: 'SELISIH OUT. PAR', value: (Number(d.netBalance) > 0 ? '+' : '') + rpShort(d.netBalance),
+      note: Number(d.netBalance) > 0 ? 'Kenaikan lebih besar daripada penyelesaian' : Number(d.netBalance) < 0 ? 'Penyelesaian lebih besar daripada kenaikan' : 'Kenaikan dan penyelesaian seimbang',
+      color: Number(d.netBalance) > 0 ? '#A66A08' : Number(d.netBalance) < 0 ? '#087A55' : '#52695D',
+      sub: 'TOTAL BALANCE'
+    },
+    {
+      label: 'SELISIH CLIENT PAR', value: (Number(d.netCount) > 0 ? '+' : '') + fmt(d.netCount),
+      note: Number(d.netCount) > 0 ? 'Loan No baru lebih banyak daripada yang selesai' : Number(d.netCount) < 0 ? 'Loan No selesai lebih banyak daripada yang baru' : 'Jumlah Loan No seimbang',
+      color: Number(d.netCount) > 0 ? '#A66A08' : Number(d.netCount) < 0 ? '#087A55' : '#52695D',
+      sub: 'JUMLAH LOAN NO'
+    }
+  ];
+  metrics.forEach((m, i) => {
+    const by = top + i * (blockH + gap);
+    phImgPanel(ctx, innerX, by, innerW, blockH, '#FFFFFF');
+    phImgText(ctx, m.label, innerX + 36, by + 74, innerW - 72, 36, '#52695D', '700', 'left', 27);
+    phImgText(ctx, m.value, innerX + 36, by + 205, innerW - 72, 82, m.color, '700', 'left', 48);
+    phImgText(ctx, m.sub, innerX + 38, by + 268, innerW - 76, 25, '#84948B', '700', 'left', 21);
+    ctx.strokeStyle = '#E6EEE8'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(innerX + 36, by + 318); ctx.lineTo(innerX + innerW - 36, by + 318); ctx.stroke();
+    phImgText(ctx, m.note, innerX + 38, by + 382, innerW - 76, 31, '#52695D', '400', 'left', 24);
+  });
+  ctx.restore();
+}
+
+function phImgRankPanel(ctx, x, y, w, h, kind, rows) {
+  const isNew = kind === 'new';
+  // PAR Baru = gradasi merah; PAR Selesai = gradasi hijau.
+  // Opasitas tiap peringkat mengikuti permintaan: 50%, 30%, 10%.
+  const rgb = isNew ? '220,53,69' : '25,135,84';
+  const accent = isNew ? '#DC3545' : '#198754';
+  const ink = isNew ? '#9F1D2D' : '#11643F';
+  const title = isNew ? '3 Cabang dengan Kenaikan Tertinggi' : '3 Cabang dengan Penyelesaian Tertinggi';
+  const desc = isNew ? 'Diurutkan berdasarkan akumulasi Out. PAR dari arsip PAR Baru.' : 'Diurutkan berdasarkan akumulasi Out. PAR dari arsip PAR Selesai.';
+  phImgPanel(ctx, x, y, w, h);
+  phImgText(ctx, title, x + 38, y + 74, w - 76, 47, '#123D2F', '700', 'left', 32);
+  phImgText(ctx, desc, x + 40, y + 124, w - 80, 27, '#6B7E74', '400', 'left', 21);
+  const pillW = 220;
+  ctx.fillStyle = `rgba(${rgb},0.12)`;
+  imgRoundRect(ctx, x + w - pillW - 34, y + 151, pillW, 52, 16, `rgba(${rgb},0.12)`);
+  phImgText(ctx, isNew ? 'PAR BARU' : 'PAR SELESAI', x + w - pillW / 2 - 34, y + 187, pillW - 24, 25, ink, '700', 'center', 20);
+
+  const list = Array.isArray(rows) ? rows.slice(0, 3) : [];
+  const listTop = y + 230, rowGap = 20;
+  const rowH = Math.floor((h - 270 - rowGap * 2) / 3);
+  if (!list.length) {
+    phImgText(ctx, 'Belum ada progres untuk periode ini.', x + 40, listTop + 100, w - 80, 34, '#7A8B82', '400', 'left', 24);
+    return;
+  }
+  const opacityByRank = [0.50, 0.30, 0.10];
+  list.forEach((r, i) => {
+    const ry = listTop + i * (rowH + rowGap);
+    const tint = `rgba(${rgb},${opacityByRank[i]})`;
+    const border = `rgba(${rgb},${Math.min(0.88, opacityByRank[i] + 0.28)})`;
+    const cardX = x + 30, cardW = w - 60;
+    // Seluruh kartu cabang diberi warna sesuai intensitas peringkat.
+    imgRoundRect(ctx, cardX, ry, cardW, rowH, 22, tint, border);
+    // Aksen kiri memperjelas kelompok ranking tanpa mengganggu keterbacaan.
+    imgRoundRect(ctx, cardX + 12, ry + 18, 12, rowH - 36, 6, accent);
+
+    const badgeX = x + 99, badgeY = ry + rowH / 2;
+    ctx.fillStyle = accent;
+    ctx.beginPath(); ctx.arc(badgeX, badgeY, 42, 0, Math.PI * 2); ctx.fill();
+    phImgText(ctx, String(i + 1).padStart(2, '0'), badgeX, badgeY + 17, 76, 39, '#FFFFFF', '700', 'center', 28);
+
+    const branch = r.branch || '-';
+    const count = isNew ? r.newCount : r.doneCount;
+    const amount = isNew ? r.newBalance : r.doneBalance;
+    phImgText(ctx, branch, x + 170, badgeY - 8, w - 500, 43, '#183C2F', '700', 'left', 27);
+    phImgText(ctx, fmt(count) + ' Client PAR (Loan No)', x + 172, badgeY + 48, w - 500, 28, '#465D52', '400', 'left', 21);
+    phImgText(ctx, rpShort(amount || 0), x + w - 62, badgeY - 5, 330, 39, ink, '700', 'right', 25);
+    phImgText(ctx, 'Out. PAR', x + w - 62, badgeY + 42, 330, 24, '#465D52', '400', 'right', 19);
+  });
+}
+
+function phImgChartPanel(ctx, x, y, w, h, daily, keyA, keyB, isMoney, selectedDate) {
+  const title = isMoney ? 'Peningkatan vs Penyelesaian Out. PAR' : 'Peningkatan vs Penyelesaian Client';
+  const desc = isMoney ? (selectedDate ? 'Nilai Total Balance seluruh tanggal; tanggal pilihan ditandai.' : 'Nilai Total Balance per tanggal progress.')
+    : (selectedDate ? 'Jumlah Loan No seluruh tanggal; tanggal pilihan ditandai.' : 'Jumlah Loan No per tanggal progress.');
+  phImgPanel(ctx, x, y, w, h);
+  phImgText(ctx, title, x + 38, y + 75, w - 76, 48, '#123D2F', '700', 'left', 31);
+  phImgText(ctx, desc, x + 40, y + 128, w - 80, 28, '#6B7E74', '400', 'left', 22);
+
+  const data = (Array.isArray(daily) ? daily : []).filter(r => r && r.date);
+  const plotX = x + 232, plotY = y + 235, plotW = w - 292, plotH = h - 450;
+  const baseY = plotY + plotH;
+  const colorNew = '#DC3545', colorDone = '#198754';
+  if (!data.length) {
+    phImgText(ctx, 'Belum ada data grafik untuk periode ini.', x + 42, plotY + 160, w - 84, 32, '#7A8B82', '400', 'left', 24);
+  } else {
+    const value = (r, key) => Number(r[key]) || 0;
+    const max = Math.max(1, ...data.map(r => Math.max(value(r, keyA), value(r, keyB)))) * 1.12;
+    const px = i => data.length > 1 ? plotX + plotW * i / (data.length - 1) : plotX + plotW / 2;
+    const py = v => baseY - (v / max) * plotH;
+    ctx.save();
+    ctx.strokeStyle = '#E5EDE8'; ctx.lineWidth = 2;
+    phImgFont(ctx, 27, '400'); ctx.fillStyle = '#718279'; ctx.textAlign = 'right';
+    for (let i = 0; i <= 4; i++) {
+      const ratio = i / 4, gy = baseY - plotH * ratio;
+      ctx.beginPath(); ctx.moveTo(plotX, gy); ctx.lineTo(plotX + plotW, gy); ctx.stroke();
+      const tick = max * ratio;
+      const label = isMoney ? rpShort(tick) : fmt(Math.round(tick));
+      ctx.fillText(phImgFit(ctx, label, plotX - x - 30, 27, '400', 19), plotX - 28, gy + 9);
+    }
+    ctx.strokeStyle = '#BBCBC1'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(plotX, plotY); ctx.lineTo(plotX, baseY); ctx.lineTo(plotX + plotW, baseY); ctx.stroke();
+
+    [[keyA, colorNew, 'circle'], [keyB, colorDone, 'diamond']].forEach(series => {
+      const [key, color, marker] = series;
+      ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 9; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      ctx.beginPath();
+      data.forEach((r, i) => { const xx = px(i), yy = py(value(r, key)); if (i) ctx.lineTo(xx, yy); else ctx.moveTo(xx, yy); });
+      ctx.stroke();
+      data.forEach((r, i) => {
+        const xx = px(i), yy = py(value(r, key));
+        ctx.beginPath();
+        if (marker === 'circle') ctx.arc(xx, yy, 15, 0, Math.PI * 2);
+        else { ctx.moveTo(xx, yy - 18); ctx.lineTo(xx + 18, yy); ctx.lineTo(xx, yy + 18); ctx.lineTo(xx - 18, yy); ctx.closePath(); }
+        ctx.fill(); ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 4; ctx.stroke(); ctx.strokeStyle = color; ctx.lineWidth = 9;
+      });
+    });
+
+    if (selectedDate) {
+      const idx = data.findIndex(r => r.date === selectedDate);
+      if (idx >= 0) {
+        ctx.strokeStyle = '#52695D'; ctx.lineWidth = 3; ctx.setLineDash([12, 10]);
+        ctx.beginPath(); ctx.moveTo(px(idx), plotY); ctx.lineTo(px(idx), baseY); ctx.stroke(); ctx.setLineDash([]);
+      }
+    }
+    const labelCount = Math.min(5, data.length);
+    const labelIndexes = [...new Set(Array.from({ length: labelCount }, (_, i) => labelCount === 1 ? 0 : Math.round(i * (data.length - 1) / (labelCount - 1))))];
+    ctx.font = '700 29px Arial, sans-serif'; ctx.fillStyle = '#718279'; ctx.textAlign = 'center';
+    labelIndexes.forEach(i => ctx.fillText(String(data[i].date).slice(8, 10), px(i), baseY + 52));
+    ctx.restore();
+  }
+  const legY = y + h - 72;
+  ctx.save();
+  ctx.strokeStyle = colorNew; ctx.fillStyle = colorNew; ctx.lineWidth = 8;
+  ctx.beginPath(); ctx.moveTo(x + 54, legY - 8); ctx.lineTo(x + 112, legY - 8); ctx.stroke();
+  ctx.beginPath(); ctx.arc(x + 83, legY - 8, 12, 0, Math.PI * 2); ctx.fill();
+  phImgText(ctx, 'PAR Baru', x + 132, legY + 2, 210, 29, '#53665D', '700', 'left', 23);
+  ctx.strokeStyle = colorDone; ctx.fillStyle = colorDone;
+  ctx.beginPath(); ctx.moveTo(x + 390, legY - 8); ctx.lineTo(x + 448, legY - 8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x + 419, legY - 23); ctx.lineTo(x + 434, legY - 8); ctx.lineTo(x + 419, legY + 7); ctx.lineTo(x + 404, legY - 8); ctx.closePath(); ctx.fill();
+  phImgText(ctx, 'PAR Selesai', x + 468, legY + 2, 260, 29, '#53665D', '700', 'left', 23);
+  ctx.restore();
+}
+
 function imgBuildProgresHarian() {
   const d = state.progress;
   if (!d || !d.totals) throw new Error('Data Progres Harian belum siap.');
@@ -1848,55 +2180,60 @@ function imgBuildProgresHarian() {
     'Cabang: ' + (filters.branch || 'Semua Cabang'),
     'Tanggal: ' + (filters.progressDate ? progresFilterDateLabel(filters.progressDate) : 'Semua Tanggal'),
     'Branch Coordinator: ' + (filters.coordinatorName || 'Semua')
-  ].join(' · ');
-  const meta = (d.monthLabel || 'Periode berjalan') + ' · s.d. ' + fmtStamp(d.asOf) + ' · ' + (d.scope || 'Sesuai Wilayah Kerja');
-  const report = imgPrepare('Progres Harian', meta), ctx = report.ctx;
-  let y = report.y;
-  ctx.font = '15px Arial, sans-serif'; ctx.fillStyle = '#52695D';
-  y = imgWrapText(ctx, filterText + (d.filterDescription ? ' · ' + d.filterDescription : ''), IMG_F4_M, y, IMG_F4_CW, 22, 3, '#52695D') + 12;
-  y = imgCards(ctx, [
-    { label: 'PAR BARU · OUT. PAR', value: rpShort(d.totals.newBalance), note: fmt(d.totals.newCount) + ' Client PAR / Loan No' },
-    { label: 'PAR SELESAI · OUT. PAR', value: rpShort(d.totals.doneBalance), note: fmt(d.totals.doneCount) + ' Client PAR / Loan No' },
-    { label: 'SELISIH OUT. PAR', value: (Number(d.netBalance) > 0 ? '+' : '') + rpShort(d.netBalance), note: Number(d.netBalance) > 0 ? 'Kenaikan lebih besar dari penyelesaian' : Number(d.netBalance) < 0 ? 'Penyelesaian lebih besar dari kenaikan' : 'Kenaikan dan penyelesaian seimbang' },
-    { label: 'SELISIH CLIENT PAR', value: (Number(d.netCount) > 0 ? '+' : '') + fmt(d.netCount), note: 'Jumlah Loan No baru dikurangi selesai' }
-  ], y, { cols: 2, cardH: 145, valueFont: 29 });
-  y += 22;
-  const colGap = 18, half = (IMG_F4_CW - colGap) / 2;
-  const topNew = (d.topNew || []).slice(0, 3).map((r, i) => [String(i + 1), r.branch || '-', fmt(r.newCount || 0), rpShort(r.newBalance || 0)]);
-  const topDone = (d.topDone || []).slice(0, 3).map((r, i) => [String(i + 1), r.branch || '-', fmt(r.doneCount || 0), rpShort(r.doneBalance || 0)]);
-  const secY = y;
-  const nextLeft = imgTable(ctx, secY, '3 CABANG PAR BARU TERTINGGI', ['#', 'Cabang', 'Client', 'Out. PAR'], topNew,
-    { x: IMG_F4_M, width: half, widths: [0.35, 1.7, 0.7, 1], rowH: 42, fontSize: 13, rightCols: [2, 3], headerFont: 12 });
-  const nextRight = imgTable(ctx, secY, '3 CABANG PAR SELESAI TERTINGGI', ['#', 'Cabang', 'Client', 'Out. PAR'], topDone,
-    { x: IMG_F4_M + half + colGap, width: half, widths: [0.35, 1.7, 0.7, 1], rowH: 42, fontSize: 13, rightCols: [2, 3], headerFont: 12 });
-  y = Math.max(nextLeft, nextRight) + 4;
+  ].join('   ·   ');
+  const meta = (d.monthLabel || 'Periode berjalan') + '   ·   s.d. ' + fmtStamp(d.asOf) + '   ·   ' + (d.scope || 'Sesuai Wilayah Kerja');
+  const canvas = document.createElement('canvas');
+  canvas.width = PH_IMG_W; canvas.height = PH_IMG_H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Browser tidak dapat menyiapkan kanvas gambar Progres Harian.');
+  ctx.fillStyle = '#F3F7F4'; ctx.fillRect(0, 0, PH_IMG_W, PH_IMG_H);
+
+  // Header landscape dan filter aktif.
+  ctx.fillStyle = '#064E3B'; ctx.fillRect(0, 0, PH_IMG_W, 292);
+  ctx.fillStyle = '#D9A928'; imgRoundRect(ctx, PH_IMG_M, 54, 14, 54, 7, '#D9A928');
+  phImgText(ctx, 'DASHBOARD OPERASIONAL SATU PINTU', PH_IMG_M + 42, 91, PH_IMG_W - PH_IMG_M * 2 - 80, 31, '#BFE6D4', '700', 'left', 25);
+  phImgText(ctx, 'PROGRES HARIAN', PH_IMG_M, 188, PH_IMG_W - PH_IMG_M * 2, 82, '#FFFFFF', '700', 'left', 58);
+  phImgText(ctx, meta, PH_IMG_M, 247, PH_IMG_W - PH_IMG_M * 2, 31, '#E0F2E9', '400', 'left', 24);
+  imgRoundRect(ctx, PH_IMG_M, 318, PH_IMG_W - PH_IMG_M * 2, 72, 18, '#E7F0EA', '#D5E3DA');
+  phImgText(ctx, filterText + (d.filterDescription ? '   ·   ' + d.filterDescription : ''), PH_IMG_M + 28, 365, PH_IMG_W - PH_IMG_M * 2 - 56, 31, '#52695D', '600', 'left', 22);
+
+  // Rasio kolom tepat 40:30:30 setelah margin dan gap.
+  const contentX = PH_IMG_M, contentY = 420;
+  const contentW = PH_IMG_W - PH_IMG_M * 2 - PH_IMG_G * 2;
+  const ratioBase = contentW / 10;
+  const leftW = Math.round(ratioBase * 4);
+  const midW = Math.round(ratioBase * 3);
+  const rightW = contentW - leftW - midW;
+  const leftX = contentX;
+  const midX = leftX + leftW + PH_IMG_G;
+  const rightX = midX + midW + PH_IMG_G;
+  const contentH = 1900;
+
+  // KIRI 40%: dua kartu utama di atas, ringkasan selisih selebar kolom di bawah.
+  const leftInnerGap = 24;
+  const kpiW = Math.floor((leftW - leftInnerGap) / 2);
+  const kpiH = 700;
+  phImgKpiCard(ctx, leftX, contentY, kpiW, kpiH, 'new', rpShort(d.totals.newBalance), d.totals.newCount);
+  phImgKpiCard(ctx, leftX + kpiW + leftInnerGap, contentY, leftW - kpiW - leftInnerGap, kpiH, 'done', rpShort(d.totals.doneBalance), d.totals.doneCount);
+  phImgNetCard(ctx, leftX, contentY + kpiH + PH_IMG_G, leftW, contentH - kpiH - PH_IMG_G, d);
+
+  // TENGAH 30%: dua kartu ranking cabang, sesuai urutan dan isi UI.
+  const stackGap = 36, stackH = Math.floor((contentH - stackGap) / 2);
+  phImgRankPanel(ctx, midX, contentY, midW, stackH, 'new', d.topNew || []);
+  phImgRankPanel(ctx, midX, contentY + stackH + stackGap, midW, contentH - stackH - stackGap, 'done', d.topDone || []);
+
+  // KANAN 30%: dua grafik line-with-marker dengan skema merah/hijau.
   const chartDaily = Array.isArray(d.dailyChart) ? d.dailyChart : (d.daily || []);
   const selectedDate = filters.progressDate || '';
-  y = imgSection(ctx, 'PERGERAKAN PROGRES PER HARI', 'Garis merah = PAR Baru · Garis hijau = PAR Selesai' + (selectedDate ? ' · tanggal terpilih ditandai garis putus-putus' : ''), y);
-  const chartGap = 18, chartW = (IMG_F4_CW - chartGap) / 2;
-  imgDrawLineChart(ctx, IMG_F4_M, y, chartW, 260, chartDaily, 'newBalance', 'doneBalance', true, selectedDate, 'Out. PAR (Total Balance)');
-  imgDrawLineChart(ctx, IMG_F4_M + chartW + chartGap, y, chartW, 260, chartDaily, 'newCount', 'doneCount', false, selectedDate, 'Client PAR (Loan No)');
-  y += 278;
-  const topUpRows = (d.topUp || []).map(r => [r.category || '-', fmt(r.newCount || 0), rpShort(r.newBalance || 0), fmt(r.doneCount || 0), rpShort(r.doneBalance || 0)]);
-  if (topUpRows.length) {
-    y = imgTable(ctx, y, 'REKAP BERDASARKAN KATEGORI TOP UP', ['Kategori', 'Baru · Client', 'Baru · Out PAR', 'Selesai · Client', 'Selesai · Out PAR'], topUpRows,
-      { widths: [1.35, 0.9, 1.2, 1.05, 1.2], rowH: 40, fontSize: 13, maxRows: 4, rightCols: [1, 2, 3, 4] });
-  }
-  const result = state.progressDetailResult;
-  const kind = state.progressRecap === 'done' ? 'done' : 'new';
-  const label = kind === 'done' ? 'PAR SELESAI' : 'PAR BARU';
-  const detailRows = result && result.kind === kind ? (result.records || []).slice(0, 8).map((r, i) => [
-    fmt((Number(result.page || 1) - 1) * Number(result.pageSize || 50) + i + 1),
-    progresFilterDateLabel(r.progressDate || ''), r.branch || '-', r.loanNo || '-', r.topUp || '-', rpShort(r.totalBalance || 0)
-  ]) : [];
-  const totalRecords = result && result.kind === kind ? Number(result.totalRecords) || 0 : 0;
-  y = imgTable(ctx, y, 'RINCIAN LOAN NO · ' + label,
-    ['No.', 'Tanggal', 'Cabang', 'Loan No', 'TOP UP', 'Total Balance'], detailRows,
-    { widths: [0.4, 0.9, 1.45, 1.15, 0.85, 1.0], rowH: 39, fontSize: 12, maxRows: 8,
-      subtitle: totalRecords ? 'Halaman ' + fmt(result.page || 1) + ' · menampilkan ' + fmt(Math.min(8, detailRows.length)) + ' dari ' + fmt(totalRecords) + ' Loan No pada daftar aktif.' : 'Daftar rincian belum tersedia atau masih dimuat.',
-      rightCols: [0, 5], emptyText: 'Daftar Loan No belum dimuat.' });
-  imgFooter(ctx, 'Angka utama mengikuti filter aktif. Rincian Loan No dibatasi 8 baris pada gambar; gunakan Excel untuk laporan lengkap.');
-  return report.canvas;
+  phImgChartPanel(ctx, rightX, contentY, rightW, stackH, chartDaily, 'newBalance', 'doneBalance', true, selectedDate);
+  phImgChartPanel(ctx, rightX, contentY + stackH + stackGap, rightW, contentH - stackH - stackGap, chartDaily, 'newCount', 'doneCount', false, selectedDate);
+
+  // Footer dibuat di luar tiga kolom agar tidak mengurangi area isi.
+  ctx.fillStyle = '#D7E4DC'; ctx.fillRect(PH_IMG_M, PH_IMG_H - 124, PH_IMG_W - PH_IMG_M * 2, 3);
+  phImgText(ctx, 'Ringkasan mengikuti filter dan cakupan Wilayah Kerja yang aktif. Satuan Out. PAR adalah Total Balance; Client PAR dihitung berdasarkan jumlah Loan No.', PH_IMG_M, PH_IMG_H - 78, PH_IMG_W - PH_IMG_M * 2, 24, '#61746A', '400', 'left', 20);
+  const stamp = new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+  phImgText(ctx, 'Dibuat ' + stamp + '  ·  F4 Landscape 330 × 210 mm  ·  300 DPI  ·  Layout 40:30:30', PH_IMG_M, PH_IMG_H - 34, PH_IMG_W - PH_IMG_M * 2, 23, '#819188', '400', 'left', 20);
+  return canvas;
 }
 
 function imgBuildAnalisaCabang() {
@@ -1944,6 +2281,10 @@ function imgBuildAnalisaCabang() {
 function rpOrCount(metric, value) { return metric.kind === 'money' ? rp(value) : fmt(value); }
 
 async function exportDashboardImage(which) {
+  if (!canDownloadImage()) {
+    toast('Fitur Download Gambar belum diaktifkan untuk tingkat akun ini.');
+    return;
+  }
   const config = {
     move: { button: 'rb-img', note: 'rb-msg', build: imgBuildRekeningBergerak, name: () => 'Ringkasan_Rekening_Bergerak_' + (state.rekening && state.rekening.year || today()) + '.png' },
     dash: { button: 'ddl-img', note: 'dmsg', build: imgBuildToolPAR, name: () => 'Ringkasan_Tool_PAR_' + today() + '.png' },
@@ -1955,11 +2296,11 @@ async function exportDashboardImage(which) {
   if (!btn) return;
   btn.disabled = true;
   try {
-    setNote(config.note, 'Menyusun gambar ringkasan F4…');
+    setNote(config.note, which === 'progress' ? 'Menyusun gambar F4 landscape 300 DPI…' : 'Menyusun gambar ringkasan F4…');
     await nextFrame();
     const canvas = config.build();
-    await imgDownload(canvas, config.name());
-    setNote(config.note, 'Gambar PNG ukuran F4 berhasil diunduh.', 'good');
+    await imgDownload(canvas, config.name(), which === 'progress' ? 300 : 0);
+    setNote(config.note, which === 'progress' ? 'Gambar PNG F4 landscape berhasil diunduh.' : 'Gambar PNG ukuran F4 berhasil diunduh.', 'good');
   } catch (err) {
     setNote(config.note, err && err.message ? err.message : 'Gagal membuat gambar ringkasan.', 'bad');
   } finally {
@@ -3145,6 +3486,40 @@ async function exportAnalisaCabang() {
 }
 
 /* ---------------------------------------------------------------------
+   Setting: Enable Download (hanya ADMINISTRATOR; server memeriksa ulang)
+   --------------------------------------------------------------------- */
+function buildImageDownloadForm() {
+  put($('image-download-level-list'), IMAGE_DOWNLOAD_USER_LEVELS.map(level =>
+    h('label', { class: 'chk' },
+      h('input', { type: 'checkbox', value: level }),
+      h('span', null, h('b', { text: level }), h('small', { text: 'Izinkan menggunakan tombol Gambar F4.' }))
+    )
+  ));
+  paintImageDownloadSettings();
+}
+async function saveImageDownloadAccess() {
+  if (!state.user || state.user.tingkat !== 'ADMINISTRATOR') return setNote('image-download-msg', 'Hanya ADMINISTRATOR yang boleh mengubah Enable Download.', 'bad');
+  if (!state.imageDownloadConfigLoaded) return setNote('image-download-msg', 'Konfigurasi belum berhasil dimuat. Muat ulang Dashboard lalu coba kembali.', 'bad');
+  const levels = imageDownloadChecked();
+  if (levels.join('|') === state.imageDownloadLevels.join('|')) return setNote('image-download-msg', 'Tidak ada perubahan.');
+  const ok = await askConfirm('Simpan Enable Download?',
+    (levels.length ? 'Tingkat yang dapat mengunduh Gambar F4: ' + levels.join(', ') + '. ' : 'Tombol Gambar F4 hanya tersedia untuk Administrator. ')
+      + 'Hak akses unduh Excel tidak berubah.', 'Simpan');
+  if (!ok) return;
+  $('image-download-save').disabled = true;
+  setNote('image-download-msg', 'Menyimpan pengaturan…');
+  const r = await api('webSetImageDownload', { token: (session.get() || {}).token, levels: JSON.stringify(levels) });
+  if (r.code === 'SESSION_REQUIRED') return logout(r.error);
+  if (!r.ok) { paintImageDownloadSettings(); return setNote('image-download-msg', r.error || 'Gagal menyimpan Enable Download.', 'bad'); }
+  state.imageDownloadLevels = IMAGE_DOWNLOAD_USER_LEVELS.filter(level => Array.isArray(r.enabledLevels) && r.enabledLevels.indexOf(level) > -1);
+  state.imageDownloadConfigLoaded = true;
+  state.imageDownloadDirty = false;
+  paintImageDownloadSettings();
+  paintImageDownloadControls();
+  setNote('image-download-msg', levels.length ? 'Tersimpan. Akses Gambar F4 aktif untuk Administrator dan ' + levels.join(', ') + '.' : 'Tersimpan. Gambar F4 hanya tersedia untuk Administrator.', 'good');
+}
+
+/* ---------------------------------------------------------------------
    Setting: Penyesuaian Margin (ADMINISTRATOR dan USER 0; server memeriksa ulang)
    --------------------------------------------------------------------- */
 async function saveMargin() {
@@ -3205,11 +3580,15 @@ async function saveWajib() {
    Setting: Wilayah Kerja (ADMINISTRATOR dan USER 0; akses server diperiksa ulang)
    --------------------------------------------------------------------- */
 function setSettingPage(which) {
-  const isWilayah = which === 'wilayah';
+  if (['global', 'wilayah', 'enable-download'].indexOf(which) < 0) which = 'global';
+  if (which === 'enable-download' && (!state.user || state.user.tingkat !== 'ADMINISTRATOR')) which = 'global';
+  state.settingPage = which;
   document.querySelectorAll('[data-setpage]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.setpage === which)));
-  $('set-global').hidden = isWilayah;
-  $('set-wilayah').hidden = !isWilayah;
-  if (isWilayah && (!state.wilayah || (!wilayahIsDirty() && Date.now() - state.wilayahLoadedAt > 60000))) loadWilayah();
+  $('set-global').hidden = which !== 'global';
+  $('set-wilayah').hidden = which !== 'wilayah';
+  $('set-enable-download').hidden = which !== 'enable-download';
+  if (which === 'wilayah' && (!state.wilayah || (!wilayahIsDirty() && Date.now() - state.wilayahLoadedAt > 60000))) loadWilayah();
+  if (which === 'enable-download') { paintImageDownloadSettings(); setNote('image-download-msg', ''); }
 }
 
 function wilayahUserByNik(nik) {
@@ -3483,7 +3862,14 @@ function bind() {
   $('setform').addEventListener('submit', e => { e.preventDefault(); saveMargin(); });
   $('mval').addEventListener('input', () => $('mval').classList.remove('bad'));
   buildWajibForm();
+  buildImageDownloadForm();
   $('wjform').addEventListener('submit', e => { e.preventDefault(); saveWajib(); });
+  $('image-download-form').addEventListener('submit', e => { e.preventDefault(); saveImageDownloadAccess(); });
+  $('image-download-level-list').addEventListener('change', () => {
+    state.imageDownloadDirty = imageDownloadChecked().join('|') !== (state.imageDownloadLevels || []).join('|');
+    paintImageDownloadSettings();
+    setNote('image-download-msg', '');
+  });
   $('wjlist').addEventListener('change', () => { state.wjDirty = !!state.data && wajibChecked() !== state.data.wajib; setNote('wjmsg', ''); syncWajibForm(); });
   document.querySelectorAll('[data-setpage]').forEach(b => b.addEventListener('click', () => setSettingPage(b.dataset.setpage)));
   $('wilayah-user-q').addEventListener('input', debounce(renderWilayahUsers, 120));
