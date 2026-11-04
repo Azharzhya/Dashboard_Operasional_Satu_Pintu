@@ -137,8 +137,8 @@
           <p class="sync" id="rb-sync" role="status"></p>
         </div>
         <div class="dact">
-          <button class="btn ghost" id="rb-ref" type="button"><span class="btn-icon" aria-hidden="true">↻</span> Muat ulang</button>
-          <button class="btn fit" id="rb-xlsx" type="button" disabled><span class="btn-icon" aria-hidden="true">↓</span> Unduh Excel</button>
+          <button class="btn ghost" id="rb-ref" type="button"><span class="btn-icon" aria-hidden="true">↻</span><span class="btn-label">Muat ulang</span></button>
+          <button class="btn fit" id="rb-xlsx" type="button" disabled><span class="btn-icon" aria-hidden="true">↓</span><span class="btn-label">Unduh Excel</span></button>
         </div>
       </div>
       <section class="rb-kpis" id="rb-kpis" aria-label="Indikator Rekening Bergerak">
@@ -195,7 +195,7 @@
 
       <!-- Dashboard Tool PAR (dashboard lama; isi dipertahankan) -->
       <div id="p-dash" class="set-page" role="tabpanel" hidden>
-      <div class="dhead">
+      <div class="dhead page-heading">
         <div>
           <div class="eyebrow"><span class="eyebrow-dot"></span> ANALISIS PORTOFOLIO</div>
           <h1 class="ph">Tool PAR</h1>
@@ -203,8 +203,8 @@
           <p class="sync" id="dsync" role="status"></p>
         </div>
         <div class="dact">
-          <button class="btn ghost" id="dref" type="button">Muat ulang</button>
-          <button class="btn fit" id="ddl" type="button" disabled>Unduh Excel</button>
+          <button class="btn ghost" id="dref" type="button"><span class="btn-icon" aria-hidden="true">↻</span><span class="btn-label">Muat ulang</span></button>
+          <button class="btn fit" id="ddl" type="button" disabled><span class="btn-icon" aria-hidden="true">↓</span><span class="btn-label">Unduh Excel</span></button>
         </div>
       </div>
 
@@ -278,10 +278,23 @@
             <p class="sync" id="ph-sync" role="status"></p>
           </div>
           <div class="dact">
-            <button class="btn ghost" id="ph-refresh" type="button">↻ Muat ulang</button>
-            <button class="btn fit" id="ph-export" type="button" disabled>↓ Unduh Excel</button>
+            <button class="btn ghost" id="ph-refresh" type="button"><span class="btn-icon" aria-hidden="true">↻</span><span class="btn-label">Muat ulang</span></button>
+            <button class="btn fit" id="ph-export" type="button" disabled><span class="btn-icon" aria-hidden="true">↓</span><span class="btn-label">Unduh Excel</span></button>
           </div>
         </div>
+
+        <section class="ph-filter-panel" aria-label="Filter Progres Harian">
+          <div class="ph-filter-head">
+            <div><span class="eyebrow">PENYARINGAN DATA</span><h2>Filter Progres</h2><p>Sesuaikan ringkasan, peringkat cabang, grafik, dan laporan Excel.</p></div>
+            <button class="btn ghost sm" id="ph-filter-reset" type="button">Reset filter</button>
+          </div>
+          <div class="ph-filter-grid">
+            <label class="ph-filter-field"><span>Cabang</span><select id="ph-filter-branch"><option value="">Semua Cabang</option></select></label>
+            <label class="ph-filter-field"><span>Tanggal Progress</span><select id="ph-filter-date"><option value="">Semua Tanggal · Bulan Berjalan</option></select></label>
+            <label class="ph-filter-field"><span>User · Branch Coordinator</span><select id="ph-filter-user"><option value="">Semua Branch Coordinator</option></select></label>
+          </div>
+          <p id="ph-filter-note" class="ph-filter-note">Filter cabang dan user mengikuti cakupan Wilayah Kerja akun yang sedang login.</p>
+        </section>
 
         <div class="ph-primary-grid" aria-label="Ringkasan PAR bulan berjalan">
           <article class="ph-primary-card ph-new-card">
@@ -335,6 +348,37 @@
           <div class="tw ph-table-wrap"><table id="ph-topup-table" class="ph-table"></table></div>
           <p class="ph-table-foot" id="ph-topup-note"></p>
         </section>
+
+        <section class="ph-recap-section" aria-label="Daftar Loan No PAR Baru dan PAR Selesai per cabang">
+          <div class="ph-recap-switch">
+            <div class="seg ph-recap-tabs" id="ph-recap-tabs" role="tablist" aria-label="Pilih rekap PAR">
+              <button type="button" id="ph-recap-tab-new" role="tab" aria-controls="ph-new-recap-panel" aria-selected="true" aria-pressed="true" data-ph-recap="new">PAR Baru</button>
+              <button type="button" id="ph-recap-tab-done" role="tab" aria-controls="ph-done-recap-panel" aria-selected="false" aria-pressed="false" data-ph-recap="done">PAR Selesai</button>
+            </div>
+            <span class="ph-recap-switch-note" id="ph-recap-context">Menampilkan rincian rekening PAR Baru.</span>
+          </div>
+          <div class="ph-recap-grid ph-recap-grid-switchable">
+            <section class="ph-panel ph-recap-panel ph-new-recap-panel" id="ph-new-recap-panel" role="tabpanel" aria-labelledby="ph-recap-tab-new">
+              <div class="ph-panel-head"><div><span class="eyebrow">RINCIAN PER CABANG · DAFTAR LOAN NO</span><h2>PAR Baru — Rincian Loan No</h2><p id="ph-new-recap-caption">Daftar Loan No baru beserta cabang, tanggal progress, kategori TOP UP, dan Total Balance.</p></div><span class="ph-rank-badge new">PAR BARU</span></div>
+              <div class="ph-table-wrap"><table id="ph-new-recap-table" class="ph-table ph-recap-table"></table></div>
+              <p class="ph-table-foot" id="ph-new-recap-note"></p>
+            </section>
+            <section class="ph-panel ph-recap-panel ph-done-recap-panel" id="ph-done-recap-panel" role="tabpanel" aria-labelledby="ph-recap-tab-done" hidden>
+              <div class="ph-panel-head"><div><span class="eyebrow">RINCIAN PER CABANG · DAFTAR LOAN NO</span><h2>PAR Selesai — Rincian Loan No</h2><p id="ph-done-recap-caption">Daftar Loan No selesai beserta cabang, tanggal progress, kategori TOP UP, dan Total Balance.</p></div><span class="ph-rank-badge done">PAR SELESAI</span></div>
+              <div class="ph-table-wrap"><table id="ph-done-recap-table" class="ph-table ph-recap-table"></table></div>
+              <p class="ph-table-foot" id="ph-done-recap-note"></p>
+            </section>
+          </div>
+          <div class="pager ph-detail-pager" aria-live="polite">
+            <span id="ph-detail-pager-info">Daftar Loan No akan dimuat saat Progres Harian dibuka.</span>
+            <div class="pnav">
+              <button class="btn ghost sm" id="ph-detail-prev" type="button" disabled>← Sebelumnya</button>
+              <span id="ph-detail-page-label">Halaman 1 / 1</span>
+              <button class="btn ghost sm" id="ph-detail-next" type="button" disabled>Berikutnya →</button>
+            </div>
+          </div>
+          <p id="ph-detail-note" class="ph-table-foot" role="status"></p>
+        </section>
         <p id="ph-msg" class="note" role="status"></p>
       </div>
 
@@ -348,8 +392,8 @@
             <p class="sync" id="an-sync" role="status"></p>
           </div>
           <div class="dact">
-            <button class="btn ghost" id="an-refresh" type="button">↻ Muat ulang</button>
-            <button class="btn fit" id="an-export" type="button" disabled>↓ Unduh Excel</button>
+            <button class="btn ghost" id="an-refresh" type="button"><span class="btn-icon" aria-hidden="true">↻</span><span class="btn-label">Muat ulang</span></button>
+            <button class="btn fit" id="an-export" type="button" disabled><span class="btn-icon" aria-hidden="true">↓</span><span class="btn-label">Unduh Excel</span></button>
           </div>
         </div>
         <section class="an-filter-panel" aria-label="Filter Analisa Cabang">
@@ -382,7 +426,7 @@
       </nav>
       <section id="set-global" class="set-page">
       <form class="setbox" id="setform" novalidate>
-        <h2>Penyesuaian Margin</h2>
+        <h2>Fitur: Penyesuaian Margin</h2>
         <p>Persentase (N) yang ditambahkan ke Total Balance sebelum dikurangi simpanan sebagai pengganti "Margin" karena data tidak memuat Margin pasti, untuk Pelunasan &lt; 100.000, &lt; 200.000, &lt; 500.000 dan Pelunasan dari Simpanan. Rumus: Total Balance + (Total Balance &times; N%). Pelunasan Tanpa Margin tidak terpengaruh.</p>
         <div class="setrow">
           <label for="mval">N (%)</label>
@@ -394,7 +438,7 @@
       </form>
 
       <form class="setbox" id="wjform" novalidate>
-        <h2>Simpanan Wajib</h2>
+        <h2>Fitur: Simpanan Wajib</h2>
         <p>Centang kategori yang ikut menghitung Simp. Wajib (sudah dikurangi 2.000). Kategori yang tidak dicentang tidak memakai Simp. Wajib. Setiap kategori memakai pilihannya sendiri, jadi satu pinjaman bisa masuk kategori yang berbeda.</p>
         <fieldset class="wjlist" id="wjlist"><legend class="sr-only">Kategori yang menghitung Simp. Wajib</legend></fieldset>
         <div class="setrow"><button class="btn fit" id="wjsave" type="submit" disabled>Simpan</button></div>
@@ -403,8 +447,8 @@
       </form>
 
       <form class="setbox" id="rb-setting-form" novalidate>
-        <h2>Rekening PAR Bergerak</h2>
-        <p>Tentukan tanggal N sebagai batas Rekening Bergerak. Rekening dihitung bergerak bila nilai Trans Pinj Terakhir pada DB lebih dari atau sama dengan tanggal ini. Tahun pada judul kolom mengikuti tahun tanggal N.</p>
+        <h2>Fitur: Rekening PAR Bergerak</h2>
+        <p>Tentukan tanggal N sebagai batas Rekening Bergerak. Rekening dihitung bergerak bila nilai Trans Pinj Terakhir pada Data_Upload lebih dari atau sama dengan tanggal ini. Tahun pada judul kolom mengikuti tahun tanggal N.</p>
         <div class="setrow">
           <label for="rb-setting-date">Tanggal N</label>
           <input id="rb-setting-date" type="date" required>
@@ -417,7 +461,7 @@
 
       <section id="set-wilayah" class="set-page" hidden>
         <div class="wilayah-intro">
-          <h2>Wilayah Kerja</h2>
+          <h2>Fitur: Wilayah Kerja</h2>
           <p>Atur cabang yang boleh dilihat setiap akun. Centang cabang pada user terpilih, lalu simpan. Perubahan berlaku pada Dashboard, Ringkasan, dan file Excel yang diunduh dari akun tersebut.</p>
         </div>
         <div class="wilayah-layout">
@@ -453,7 +497,7 @@
     <!-- Unggah Excel (ADMINISTRATOR) -->
     <div id="p-up" role="tabpanel" aria-labelledby="t-up" hidden>
       <h1 class="ph">Unggah Excel</h1>
-      <p class="lead">Satu pintu untuk dua proses.</p>
+      <p class="lead">Satu pintu untuk dua proses: gunakan nama <b>PAR 30-10-2026.xlsx</b> atau <b>Analisa 30-10-2026.xlsx</b> (tanggal wajib dd-mm-yyyy). PAR menjalankan pemeriksaan Loan No dan pembaruan Data_Upload; Analisa menyimpan data ke sheet Analisa tanpa mengubah Data_Upload.</p>
       <label class="drop" id="drop" for="file">
         <b>Pilih file Excel</b>
         <span>atau seret file ke sini · .xls / .xlsx</span>
@@ -467,9 +511,9 @@
           <div id="updiffstats" class="stats"></div>
           <div class="updiff-grid">
             <div><b>Contoh LOAN NO Baru</b><p id="updiff-new-samples" class="updiff-samples">Tidak ada.</p><small>Baris lengkap dari Excel akan ditambahkan ke sheet <b>PAR Baru</b>.</small></div>
-            <div><b>Contoh LOAN NO Selesai</b><p id="updiff-done-samples" class="updiff-samples">Tidak ada.</p><small>Baris lengkap dari <b>DB</b> akan ditambahkan ke sheet <b>PAR Selesai</b>.</small></div>
+            <div><b>Contoh LOAN NO Selesai</b><p id="updiff-done-samples" class="updiff-samples">Tidak ada.</p><small>Baris lengkap dari <b>Data_Upload</b> akan ditambahkan ke sheet <b>PAR Selesai</b>.</small></div>
           </div>
-          <p class="updiff-help">Sinkron ke DB lama belum diubah. Periksa hasil di atas, lalu konfirmasi untuk menyimpan arsip dan mengganti DB.</p>
+          <p class="updiff-help">Data_Upload lama belum diubah. Periksa hasil di atas, lalu konfirmasi untuk menyimpan arsip dan mengganti Data_Upload.</p>
         </section>
         <div class="bar" id="upbar" hidden><i id="upfill"></i></div>
         <p id="upmsg" class="note" role="status"></p>
@@ -485,17 +529,17 @@
           <h1 class="ph">Versi &amp; Changelog</h1>
           <p class="lead">Catatan fitur, penyempurnaan, dan perbaikan PAR Web Tool dari fondasi awal hingga rilis saat ini.</p>
         </div>
-        <span class="version-current"><i></i> Versi saat ini <b>v10.7</b></span>
+        <span class="version-current"><i></i> Versi saat ini <b>v10.11</b></span>
       </div>
 
       <section class="version-overview" aria-label="Ringkasan versi saat ini">
         <div class="version-overview-main">
           <span class="version-overview-label">RILIS TERBARU</span>
-          <strong>Web Tool Regional v10.7</strong>
-          <p>Penggantian password awal diwajibkan sebelum pengguna dapat mengakses Dashboard.</p>
+          <strong>Dashboard Modern v10.11</strong>
+          <p>Perbaikan tab rekap dan daftar detail per Loan No untuk PAR Baru dan PAR Selesai.</p>
         </div>
-        <div class="version-overview-stat"><strong>10.7</strong><span>Versi terbaru</span></div>
-        <div class="version-overview-stat"><strong>15</strong><span>Catatan rilis &amp; fondasi</span></div>
+        <div class="version-overview-stat"><strong>10.11</strong><span>Versi terbaru</span></div>
+        <div class="version-overview-stat"><strong>18</strong><span>Catatan rilis &amp; fondasi</span></div>
       </section>
 
       <div class="version-toolbar">
@@ -505,11 +549,48 @@
 
       <div id="version-list" class="version-list">
         <details class="version-item" open>
-          <summary><span class="version-marker latest">10.7</span><span class="version-summary"><b>Web Tool Regional v10.7</b><small>Validasi password awal dan penggantian wajib</small></span><span class="version-tag">KEAMANAN</span></summary>
+          <summary><span class="version-marker latest">10.11</span><span class="version-summary"><b>Dashboard Modern v10.11</b><small>Daftar detail PAR Baru dan PAR Selesai per Loan No</small></span><span class="version-tag">DASHBOARD</span></summary>
           <div class="version-body"><ul>
-            <li>Setelah NIK dan password berhasil diverifikasi, akun yang masih menggunakan password default diarahkan ke halaman Ganti Password.</li>
+            <li>Tab PAR Baru dan PAR Selesai diperbaiki agar hanya tab aktif yang berwarna hijau; tab nonaktif tetap putih.</li>
+            <li>Tabel Rincian per Cabang kini menampilkan daftar setiap Loan No, bukan hanya total agregasi cabang.</li>
+            <li>Setiap baris menampilkan Tanggal Progress, Cabang, Loan No, kategori TOP UP, dan Total Balance.</li>
+            <li>Daftar menggunakan pagination agar tetap ringan untuk arsip yang besar. Filter dan hak akses Wilayah Kerja divalidasi kembali di server.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">10.10</span><span class="version-summary"><b>Dashboard Modern v10.10</b><small>Tombol perpindahan rekap PAR Baru dan PAR Selesai</small></span><span class="version-tag">DASHBOARD</span></summary>
+          <div class="version-body"><ul>
+            <li>Dua tabel rekap pada bagian bawah Progres Harian disajikan melalui tab PAR Baru dan PAR Selesai agar pengguna dapat berpindah tanpa memenuhi layar dengan dua tabel sekaligus.</li>
+            <li>PAR Baru menjadi tab awal; pengguna dapat berpindah ke PAR Selesai melalui tombol di area rekap.</li>
+            <li>Kedua tabel tetap mengikuti filter Cabang, Tanggal Progress, Branch Coordinator, dan pembatasan Wilayah Kerja yang berlaku.</li>
+            <li>Data dan ekspor Excel tetap memuat kedua rekap; perubahan hanya pada cara penyajian di layar.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">10.9</span><span class="version-summary"><b>Dashboard Modern v10.9</b><small>Tabel rekap PAR Baru dan PAR Selesai per cabang</small></span><span class="version-tag">DASHBOARD</span></summary>
+          <div class="version-body"><ul>
+            <li>Dua tabel rekap lengkap ditambahkan pada bagian bawah Progres Harian: PAR Baru dan PAR Selesai.</li>
+            <li>Setiap tabel menampilkan urutan cabang, jumlah Client PAR berdasarkan Loan No, dan akumulasi Out. PAR dari Total Balance.</li>
+            <li>Data tabel mengikuti filter Cabang, Tanggal Progress, dan Branch Coordinator serta pembatasan Wilayah Kerja yang berlaku.</li>
+            <li>Baris TOTAL ditampilkan pada footer masing-masing tabel; urutan cabang berdasarkan Out. PAR tertinggi.</li>
+            <li>Ekspor Excel ditambah sheet terpisah PAR Baru dan PAR Selesai agar rekap di layar tersedia dalam laporan.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">10.8</span><span class="version-summary"><b>Dashboard Modern v10.8</b><small>Filter Progres Harian per cabang, tanggal, dan Branch Coordinator</small></span><span class="version-tag">DASHBOARD</span></summary>
+          <div class="version-body"><ul>
+            <li>Filter Cabang, Tanggal Progress, dan User dengan jabatan BRANCH COORDINATOR ditambahkan pada Progres Harian.</li>
+            <li>Pilihan cabang, tanggal, dan Branch Coordinator dibatasi server-side berdasarkan Wilayah_Kerja akun yang login.</li>
+            <li>Administrator non-Branch Coordinator dapat melihat seluruh cabang; akun Branch Coordinator selalu dibatasi pada wilayah kerjanya.</li>
+            <li>Kartu, peringkat tiga cabang, grafik harian, kategori TOP UP, dan ekspor Excel mengikuti filter yang dipilih.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">10.7</span><span class="version-summary"><b>Dashboard Modern v10.7</b><small>Validasi password awal dan penggantian wajib</small></span><span class="version-tag">KEAMANAN</span></summary>
+          <div class="version-body"><ul>
+            <li>Setelah NIK dan password berhasil diverifikasi, akun yang masih menggunakan password awal <code>komida2022!</code> diarahkan ke halaman Ganti Password.</li>
             <li>Pengguna belum memperoleh token Dashboard sebelum password baru berhasil disimpan.</li>
-            <li>Password baru dan konfirmasi divalidasi, minimal 8 karakter, berbeda dari password default, lalu disimpan pada sheet.</li>
+            <li>Password baru dan konfirmasi divalidasi, minimal 8 karakter, berbeda dari password awal, lalu disimpan sebagai hash PBKDF2 pada sheet <code>Akses_2</code>.</li>
             <li>Challenge penggantian password memiliki token khusus berumur 15 menit dan tidak memiliki hak akses Dashboard.</li>
             <li>Pengguna yang sudah mengganti password dapat login normal menggunakan password terbaru.</li>
             <li>Sesi browser lama dibersihkan satu kali setelah pembaruan agar pengguna melakukan login kembali.</li>
@@ -517,7 +598,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">10.6</span><span class="version-summary"><b>Web Tool Regional v10.6</b><small>Menu Versi &amp; Changelog</small></span><span class="version-tag">DOKUMENTASI</span></summary>
+          <summary><span class="version-marker">10.6</span><span class="version-summary"><b>Dashboard Modern v10.6</b><small>Menu Versi &amp; Changelog</small></span><span class="version-tag">DOKUMENTASI</span></summary>
           <div class="version-body"><ul>
             <li>Menu Versi &amp; Changelog ditambahkan dan dapat dibuka semua tingkat pengguna.</li>
             <li>Riwayat pembaruan dari fondasi aplikasi hingga v10.5 dirangkum per rilis, dapat dibuka/tutup, dan dicari.</li>
@@ -525,7 +606,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">10.5</span><span class="version-summary"><b>Web Tool Regional v10.5</b><small>Filter Analisa Cabang disederhanakan</small></span><span class="version-tag">ANALISA</span></summary>
+          <summary><span class="version-marker">10.5</span><span class="version-summary"><b>Dashboard Modern v10.5</b><small>Filter Analisa Cabang disederhanakan</small></span><span class="version-tag">TERBARU</span></summary>
           <div class="version-body"><ul>
             <li>Filter Tahun dan Bulan dihapus dari Analisa Cabang.</li>
             <li>Filter yang tersisa hanya Cabang, Tanggal Analisa, dan Bandingkan dengan.</li>
@@ -536,7 +617,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">10.4</span><span class="version-summary"><b>Web Tool Regional v10.4</b><small>Format tanggal Analisa Cabang</small></span><span class="version-tag">UI</span></summary>
+          <summary><span class="version-marker">10.4</span><span class="version-summary"><b>Dashboard Modern v10.4</b><small>Format tanggal Analisa Cabang</small></span><span class="version-tag">UI</span></summary>
           <div class="version-body"><ul>
             <li>Dropdown Tanggal Analisa dan Bandingkan dengan menampilkan tanggal dalam format <code>yyyy mmm dd</code>.</li>
             <li>Nilai tanggal internal tetap <code>yyyy-MM-dd</code> agar pengurutan dan validasi periode tetap akurat.</li>
@@ -544,7 +625,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">10.3</span><span class="version-summary"><b>Web Tool Regional v10.3</b><small>Detail nilai perbandingan Analisa</small></span><span class="version-tag">ANALISA</span></summary>
+          <summary><span class="version-marker">10.3</span><span class="version-summary"><b>Dashboard Modern v10.3</b><small>Detail nilai perbandingan Analisa</small></span><span class="version-tag">ANALISA</span></summary>
           <div class="version-body"><ul>
             <li>Delapan kartu indikator menampilkan nilai periode terbaru dan nilai periode pembanding.</li>
             <li>Setiap kartu menampilkan perubahan nominal/jumlah dan persentase perubahan.</li>
@@ -554,7 +635,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">10.2</span><span class="version-summary"><b>Web Tool Regional v10.2</b><small>Validasi urutan tanggal perbandingan</small></span><span class="version-tag">ANALISA</span></summary>
+          <summary><span class="version-marker">10.2</span><span class="version-summary"><b>Dashboard Modern v10.2</b><small>Validasi urutan tanggal perbandingan</small></span><span class="version-tag">ANALISA</span></summary>
           <div class="version-body"><ul>
             <li>Perbandingan wajib bergerak dari tanggal lama ke tanggal terbaru.</li>
             <li>Dropdown pembanding hanya menampilkan tanggal sebelum periode analisa utama.</li>
@@ -564,24 +645,28 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">10.1</span><span class="version-summary"><b>Web Tool Regional v10.1</b><small>Koreksi header Excel Analisa</small></span><span class="version-tag">UPLOAD</span></summary>
+          <summary><span class="version-marker">10.1</span><span class="version-summary"><b>Dashboard Modern v10.1</b><small>Koreksi header Excel Analisa</small></span><span class="version-tag">UPLOAD</span></summary>
           <div class="version-body"><ul>
+            <li>Validasi header sumber diperbarui mengikuti nama yang benar: <code>Name</code>, <code>Outs. Loan</code>, <code>Tot. Sav. Balance</code>, <code>Memb. PAR</code>, dan <code>Outs. PAR</code>.</li>
             <li>Nama kolom tujuan di sheet Analisa tetap konsisten, sehingga dashboard tidak perlu mengubah struktur datanya.</li>
             <li>Validasi header dibuat toleran terhadap perbedaan kapitalisasi, spasi, titik, dan tanda baca.</li>
           </ul></div>
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">10.0</span><span class="version-summary"><b>Web Tool Regional v10.0</b><small>Upload multi-fungsi dan dashboard Analisa</small></span><span class="version-tag">ADD: ANALISA CABANG</span></summary>
+          <summary><span class="version-marker">10.0</span><span class="version-summary"><b>Dashboard Modern v10 — Analisa Cabang</b><small>Upload multi-fungsi dan dashboard Analisa</small></span><span class="version-tag">FITUR BARU</span></summary>
           <div class="version-body"><ul>
+            <li>Satu menu Unggah Excel mendeteksi jenis proses melalui nama file: <code>PAR dd-mm-yyyy</code> atau <code>Analisa dd-mm-yyyy</code>.</li>
+            <li>File Analisa membaca header baris 4 dan data baris 5–22, lalu memetakan indikator ke sheet <code>Analisa</code>.</li>
             <li>Periode Analisa diambil dari tanggal pada nama file. Unggahan periode baru ditambahkan; unggahan ulang periode yang sama memperbarui data periode tersebut.</li>
             <li>Dashboard Analisa Cabang menampilkan Member, Outstanding, Disbursement, Saving, Repayment, Margin, Member PAR, dan Outstanding PAR.</li>
             <li>Perbandingan periode, kartu indikator, tabel per cabang, ekspor Excel, dan pembatasan Wilayah Kerja ditambahkan.</li>
+            <li>File PAR tetap menjalankan pemeriksaan Loan No dan alur pembaruan Data_Upload yang sudah ada.</li>
           </ul></div>
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">09.0</span><span class="version-summary"><b>Web Tool Regional v09.0</b><small>Monitoring PAR Baru dan PAR Selesai</small></span><span class="version-tag">ADD: PROGRES HARIAN</span></summary>
+          <summary><span class="version-marker">9</span><span class="version-summary"><b>Dashboard Modern v9 — Progres Harian</b><small>Monitoring PAR Baru dan PAR Selesai</small></span><span class="version-tag">DASHBOARD</span></summary>
           <div class="version-body"><ul>
             <li>Dashboard Progres Harian menggunakan arsip sheet PAR Baru dan PAR Selesai berdasarkan Tanggal Progress pada bulan berjalan.</li>
             <li>Kartu total kenaikan dan penyelesaian Out. PAR serta Client PAR ditambahkan.</li>
@@ -592,7 +677,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">08.0</span><span class="version-summary"><b>Web Tool Regional v08.0</b><small>Tanggal Progress untuk arsip PAR</small></span><span class="version-tag">ARSIP</span></summary>
+          <summary><span class="version-marker">8</span><span class="version-summary"><b>Dashboard Modern v8</b><small>Tanggal Progress untuk arsip PAR</small></span><span class="version-tag">ARSIP</span></summary>
           <div class="version-body"><ul>
             <li>Sheet PAR Baru dan PAR Selesai mempertahankan data lama dengan metode append.</li>
             <li>Kolom Tanggal Progress diisi pada setiap baris arsip berdasarkan tanggal pemeriksaan.</li>
@@ -602,24 +687,26 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">07.0</span><span class="version-summary"><b>Web Tool Regional v07.0</b><small>Pengecualian batas sinkron untuk Administrator</small></span><span class="version-tag">AKSES</span></summary>
+          <summary><span class="version-marker">7</span><span class="version-summary"><b>Dashboard Modern v7</b><small>Pengecualian batas sinkron untuk Administrator</small></span><span class="version-tag">AKSES</span></summary>
           <div class="version-body"><ul>
+            <li>Akun ADMINISTRATOR dikecualikan dari batas tiga kali sinkron otomatis per sesi.</li>
+            <li>Administrator tetap dapat melakukan sinkron otomatis berkala tanpa logout paksa.</li>
             <li>Batas sinkron dan logout otomatis tetap berlaku untuk tingkat pengguna lainnya.</li>
           </ul></div>
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">06.0</span><span class="version-summary"><b>Web Tool Regional v06.0</b><small>Pemeriksaan PAR Baru dan PAR Selesai</small></span><span class="version-tag">UPLOAD</span></summary>
+          <summary><span class="version-marker">6</span><span class="version-summary"><b>Dashboard Modern v6</b><small>Pemeriksaan PAR Baru dan PAR Selesai</small></span><span class="version-tag">UPLOAD</span></summary>
           <div class="version-body"><ul>
-            <li>LOAN NO pada Excel dibandingkan untuk menemukan rekening baru dan rekening yang selesai.</li>
+            <li>LOAN NO pada Excel dibandingkan dengan Data_Upload untuk menemukan rekening baru dan rekening yang selesai.</li>
             <li>Baris lengkap sumber disalin ke sheet PAR Baru dan PAR Selesai.</li>
-            <li>Hasil pemeriksaan ditampilkan sebelum konfirmasi dan pembaruan DB.</li>
+            <li>Hasil pemeriksaan ditampilkan sebelum konfirmasi dan pembaruan Data_Upload.</li>
             <li>Proses staging dan pemulihan commit ditambahkan untuk menjaga keamanan data saat proses unggah terputus.</li>
           </ul></div>
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">05.0</span><span class="version-summary"><b>Web Tool Regional v05.0</b><small>Batas sinkron otomatis per sesi pengguna</small></span><span class="version-tag">SISTEM</span></summary>
+          <summary><span class="version-marker">5</span><span class="version-summary"><b>Dashboard Modern v5</b><small>Batas sinkron otomatis per sesi pengguna</small></span><span class="version-tag">SISTEM</span></summary>
           <div class="version-body"><ul>
             <li>Sinkron otomatis dibatasi tiga kali per sesi login.</li>
             <li>Sebelum request otomatis keempat, sesi dibersihkan dan halaman dikembalikan ke Login.</li>
@@ -629,7 +716,7 @@
         </details>
 
         <details class="version-item">
-          <summary><span class="version-marker">04.0</span><span class="version-summary"><b>Web Tool Regional v04.0</b><small>Penyegaran UI dan pengalaman penggunaan</small></span><span class="version-tag">UI</span></summary>
+          <summary><span class="version-marker">4</span><span class="version-summary"><b>Dashboard Modern v4</b><small>Penyegaran UI dan pengalaman penggunaan</small></span><span class="version-tag">UI</span></summary>
           <div class="version-body"><ul>
             <li>UI diperbarui dengan pendekatan Clean Modern Dashboard dan Material Design.</li>
             <li>Sidebar desktop dan navigasi bawah untuk Android ditambahkan.</li>

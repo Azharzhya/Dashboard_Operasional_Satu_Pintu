@@ -782,11 +782,24 @@ th.num .th{flex-direction:row-reverse}
 .ph-chart-panel{overflow:hidden}
 .ph-legend{display:flex;gap:16px;flex-wrap:wrap;margin:0 0 8px;color:var(--mute);font-size:9px;font-weight:700}
 .ph-legend span{display:inline-flex;align-items:center;gap:6px}
-.ph-legend i{display:inline-block;width:9px;height:9px;border-radius:3px;background:var(--em)}
-.ph-legend i.done{background:var(--yel)}
-.ph-chart-host{min-width:0}
-.ph-chart-scroll{overflow-x:auto;overflow-y:hidden;padding:3px 0 7px;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
-.ph-chart-scroll svg{display:block;max-width:none;height:auto}
+.ph-legend i{position:relative;display:inline-block;width:20px;height:2px;border-radius:2px;background:#0a7a5a}
+.ph-legend i::after{content:'';position:absolute;left:50%;top:50%;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;background:#0a7a5a;border:1.5px solid #fff;box-sizing:border-box}
+.ph-legend i.done{background:#d99e00}
+.ph-legend i.done::after{background:#d99e00;border-radius:2px;transform:rotate(45deg)}
+.ph-chart-host{position:relative;min-width:0;min-height:240px}
+.ph-chart-svg{display:block;width:100%;height:auto;touch-action:pan-y;user-select:none;-webkit-user-select:none;overflow:visible}
+.ph-chart-tip{position:absolute;top:8px;z-index:3;min-width:150px;padding:8px 10px;border:1px solid var(--line-2);border-radius:10px;background:#fff;box-shadow:0 6px 18px rgba(6,78,59,.14);font-size:10px;color:var(--ink);pointer-events:none}
+.ph-chart-tip[hidden]{display:none}
+.ph-tip-date{display:block;margin-bottom:5px;font-size:11px;color:var(--em-dd)}
+.ph-tip-row{display:flex;align-items:center;gap:7px;line-height:1.7}
+.ph-tip-row span:nth-child(2){flex:1;color:var(--mute);font-weight:600}
+.ph-tip-val{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ph-tip-row i{position:relative;display:inline-block;width:12px;height:2px;border-radius:2px;background:#0a7a5a}
+.ph-tip-row i::after{content:'';position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:#0a7a5a;border:1.2px solid #fff;box-sizing:border-box}
+.ph-tip-row i.done{background:#d99e00}
+.ph-tip-row i.done::after{background:#d99e00;border-radius:1.5px;transform:rotate(45deg)}
+.ph-tip-row.net{margin-top:3px;padding-top:4px;border-top:1px solid var(--line)}
+.ph-tip-gap{display:inline-block;width:12px}
 .ph-topup-panel{margin-bottom:12px}
 .ph-table-wrap{width:100%;overflow:auto;border:1px solid var(--line);border-radius:11px}
 .ph-table{width:100%;min-width:680px;border-collapse:separate;border-spacing:0;font-size:11px;font-variant-numeric:tabular-nums}
@@ -797,7 +810,18 @@ th.num .th{flex-direction:row-reverse}
 .ph-table tbody tr:nth-child(even) td,.ph-table tbody tr:nth-child(even) th{background:#f7fbf8}
 .ph-table tfoot th,.ph-table tfoot td{background:var(--em-l);color:var(--em-dd);font-weight:900;border-bottom:0}
 .ph-table-foot{font-size:9px;line-height:1.5;color:var(--mute);margin:9px 1px 0}
-@media(max-width:1050px){.ph-panel{padding:14px}.ph-rank-grid,.ph-chart-grid{gap:10px}}
+.ph-recap-section{margin:0 0 14px}
+.ph-recap-switch{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 10px}
+.ph-recap-tabs{flex:none}
+.ph-recap-switch-note{font-size:10px;color:var(--mute);font-weight:600}
+.ph-recap-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:0 0 14px}
+.ph-recap-grid-switchable{grid-template-columns:minmax(0,1fr)}
+.ph-recap-panel{min-width:0;overflow:hidden}
+.ph-recap-table{min-width:560px}
+.ph-recap-table .ph-recap-no{width:48px;color:var(--mute);text-align:center}
+.ph-recap-empty-cell{text-align:center!important;color:var(--mute);padding:22px 12px!important}
+.ph-recap-panel .ph-panel-head{min-height:58px}
+@media(max-width:1050px){.ph-panel{padding:14px}.ph-rank-grid,.ph-chart-grid,.ph-recap-grid{gap:10px}}
 @media(max-width:760px){
   .ph-primary-grid{gap:8px;margin-bottom:9px}
   .ph-primary-card{padding:13px 12px;border-radius:13px}
@@ -812,8 +836,12 @@ th.num .th{flex-direction:row-reverse}
   .ph-net-label{font-size:8px}.ph-net-strip b{font-size:13px}.ph-net-strip small{font-size:8px}
   .ph-scope{margin-left:0;font-size:8px}
   .ph-notice{font-size:9.5px;padding:10px 11px}
-  .ph-rank-grid,.ph-chart-grid{grid-template-columns:1fr;gap:9px;margin-bottom:10px}
+  .ph-rank-grid,.ph-chart-grid,.ph-recap-grid{grid-template-columns:1fr;gap:9px;margin-bottom:10px}
   .ph-panel{padding:12px;border-radius:13px}
+  .ph-recap-switch{align-items:stretch;gap:7px}
+  .ph-recap-tabs{display:flex;width:100%}
+  .ph-recap-tabs button{flex:1;padding:0 10px;height:42px;font-size:12px}
+  .ph-recap-switch-note{font-size:9px}
   .ph-panel-head h2{font-size:13px}.ph-panel-head p{font-size:9px}
   .ph-rank-row{grid-template-columns:27px minmax(0,1fr) auto;gap:7px;padding:9px 8px}
   .ph-rank-number{width:25px;height:25px;font-size:10px}
@@ -941,3 +969,49 @@ th.num .th{flex-direction:row-reverse}
   .version-body ul{font-size:10.5px;gap:6px;margin-top:10px}
 }
 @media(max-width:380px){.version-tag{display:none}.version-item>summary{gap:7px}.version-body{padding-left:15px}}
+
+/* Progres Harian: filter cabang, tanggal progress, dan Branch Coordinator */
+.ph-filter-panel{margin:0 0 15px;padding:16px 18px;border:1px solid var(--line);border-radius:16px;background:#fff;box-shadow:var(--shadow-card)}
+.ph-filter-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:13px}
+.ph-filter-head h2{margin:3px 0 3px;font-family:var(--font-body);font-size:15px;font-weight:800;color:var(--em-dd)}
+.ph-filter-head p{font-size:10px;line-height:1.45;color:var(--mute)}
+.ph-filter-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.ph-filter-field{display:grid;gap:6px;min-width:0}
+.ph-filter-field>span{font-size:10px;font-weight:800;color:var(--ink)}
+.ph-filter-field select{width:100%;min-width:0;min-height:42px;padding:9px 34px 9px 11px;border:1px solid var(--line-2);border-radius:10px;background:#fbfdfc;color:var(--ink);font:600 11px var(--font-body);outline:none}
+.ph-filter-field select:focus{border-color:var(--em);box-shadow:0 0 0 3px var(--em-l)}
+.ph-filter-field select:disabled{opacity:.58;cursor:not-allowed;background:#f4f6f5}
+.ph-filter-note{margin:10px 1px 0;font-size:9px;line-height:1.5;color:var(--mute)}
+@media(max-width:900px){.ph-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.ph-filter-panel{padding:12px;margin-bottom:10px;border-radius:13px}.ph-filter-head{align-items:center;margin-bottom:10px}.ph-filter-head h2{font-size:13px}.ph-filter-head p{font-size:9px}.ph-filter-grid{grid-template-columns:1fr;gap:9px}.ph-filter-field>span{font-size:9px}.ph-filter-field select{min-height:40px;font-size:10px}.ph-filter-note{font-size:8px}}
+
+/* v10.11: status tab rekap dibuat eksplisit agar hanya satu tab aktif/hijau. */
+.ph-recap-tabs button{background:#fff!important;color:var(--em-d)!important;transition:background .15s,color .15s,border-color .15s}
+.ph-recap-tabs button.is-active,.ph-recap-tabs button[aria-pressed="true"]{background:var(--em)!important;color:#fff!important}
+.ph-recap-tabs button:not(.is-active):not([aria-pressed="true"]){background:#fff!important;color:var(--em-d)!important}
+.ph-detail-table{min-width:820px}
+.ph-detail-table td.ph-loan-no{font-weight:800;color:var(--em-dd);letter-spacing:.02em}
+.ph-detail-table td.ph-detail-amount{text-align:right;font-variant-numeric:tabular-nums}
+.ph-detail-pager{margin:12px 2px 4px}
+.ph-detail-pager .pnav{gap:7px}
+.ph-detail-pager .pnav span{min-width:86px}
+@media(max-width:760px){.ph-detail-pager{align-items:stretch;gap:8px}.ph-detail-pager .pnav{width:100%;justify-content:space-between}.ph-detail-pager .pnav .btn{min-height:38px;padding:0 10px}.ph-detail-pager .pnav span{min-width:72px;font-size:11px}}
+
+/* Tombol aksi header (Muat ulang + Unduh Excel) disamakan di semua menu Dashboard.
+   Posisi dikunci di pojok kanan atas header dan ukuran tombol tetap, jadi tidak bergeser
+   saat teks judul, keterangan, atau status sinkronisasi berubah. */
+.dhead{flex-wrap:nowrap;align-items:flex-start;justify-content:space-between;gap:20px}
+.dhead>:first-child{flex:1 1 0;min-width:0}
+.dhead>.dact{flex:0 0 auto;align-self:flex-start;display:flex;align-items:center;justify-content:flex-end;gap:10px;width:auto;margin:0}
+.dhead>.dact .btn{flex:0 0 152px;width:152px;min-width:152px;max-width:152px;height:42px;min-height:42px;padding:0 14px;gap:8px;border-radius:10px;font-size:12.5px;font-weight:700;line-height:1;white-space:nowrap;box-sizing:border-box}
+.dhead>.dact .btn.fit{border:1.5px solid transparent}
+.dhead>.dact .btn:disabled{opacity:.5;cursor:not-allowed}
+.dhead>.dact .btn.fit:disabled{box-shadow:none}
+.dhead>.dact .btn-icon{display:inline-flex;align-items:center;justify-content:center;flex:none;width:16px;height:16px;font-size:16px;line-height:1}
+.dhead>.dact .btn-label{display:inline-block}
+@media(max-width:760px){
+  .dhead{flex-wrap:wrap;gap:12px}
+  .dhead>.dact{order:-1;flex:1 1 100%;width:100%;gap:8px}
+  .dhead>.dact .btn{flex:1 1 0;width:auto;min-width:0;max-width:none;padding:0 8px;font-size:11px}
+  .dhead>:first-child{flex:1 1 100%}
+}

@@ -276,7 +276,9 @@ const state = {
   sumBy: 'branch', sumSort: { key: 'n', dir: -1 }, sumQ: '', wjDirty: false,
   wilayah: null, wilayahSelected: '', wilayahDraft: [], wilayahDrafts: Object.create(null), wilayahLoading: false, wilayahLoadedAt: 0,
   rekening: null, rekeningLoading: false, rekeningLoadedAt: 0, dashboardPage: 'move',
-  progress: null, progressLoading: false, progressLoadedAt: 0,
+  progress: null, progressLoading: false, progressLoadedAt: 0, progressReloadPending: false,
+  progressFilters: { branch: '', progressDate: '', coordinatorNik: '' }, progressFilterRevision: 0,
+  progressRecap: 'new', progressDetailPage: 1, progressDetailSeq: 0, progressDetailResult: null,
   analisaCabang: null, analisaLoading: false, analisaLoadedAt: 0, analisaFilters: { branch: '*', period: '', compare: '' },
   rbView: 'branch', rbSearch: { branch: '', coordinator: '' },
   rbSort: { branch: { key: 'name', dir: 1 }, coordinator: { key: 'name', dir: 1 } },
@@ -419,7 +421,9 @@ function logout(msg, forceRefresh) {
   const cacheClear = cache.clear();
   state.wilayah = null; state.wilayahDraft = []; state.wilayahDrafts = Object.create(null); state.wilayahSelected = ''; setNote('wjmsg', '');
   state.rekening = null; state.rekeningLoadedAt = 0; state.rekeningLoading = false;
-  state.progress = null; state.progressLoadedAt = 0; state.progressLoading = false;
+  state.progress = null; state.progressLoadedAt = 0; state.progressLoading = false; state.progressReloadPending = false;
+  state.progressRecap = 'new'; state.progressDetailPage = 1; state.progressDetailSeq++; state.progressDetailResult = null;
+  state.progressFilters = { branch: '', progressDate: '', coordinatorNik: '' }; state.progressFilterRevision++;
   state.analisaCabang = null; state.analisaLoadedAt = 0; state.analisaLoading = false;
   clearDash(); resetUpload();
   showView('login', msg || '');
@@ -520,7 +524,10 @@ function enterApp(user) {
   state.cat = 'a'; state.q = ''; state.branch = ''; state.staf = ''; state.page = 0; state.sort = { label: '', dir: 1 };
   resetUpload(); setNote('setmsg', ''); setNote('wjmsg', ''); setNote('rb-setting-msg', ''); state.wjDirty = false;
   state.rekening = null; state.rekeningLoadedAt = 0;
-  state.progress = null; state.progressLoadedAt = 0; state.progressLoading = false;
+  state.progress = null; state.progressLoadedAt = 0; state.progressLoading = false; state.progressReloadPending = false;
+  state.progressRecap = 'new'; state.progressDetailPage = 1; state.progressDetailSeq++; state.progressDetailResult = null;
+  state.progressFilters = { branch: '', progressDate: '', coordinatorNik: '' }; state.progressFilterRevision++;
+  $('ph-filter-branch').value = ''; $('ph-filter-date').value = ''; $('ph-filter-user').value = '';
   state.analisaCabang = null; state.analisaLoadedAt = 0; state.analisaLoading = false;
   state.analisaFilters = { branch: '*', period: '', compare: '' };
   state.dashboardPage = 'move';
@@ -907,7 +914,7 @@ function drawSummary() {
   setNote('smsg', '');
   const kind = state.sumBy, q = state.sumQ.trim().toLowerCase(), sort = state.sumSort;
   $('sq').placeholder = kind === 'branch' ? 'Cari cabang…' : 'Cari staf atau cabang…';
-  document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.g === kind)));
+  document.querySelectorAll('#p-sum .seg button[data-g]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.g === kind)));
 
   let list = groupsOf(kind);
   if (q) list = list.filter(g => (g.name + ' ' + g.branch).toLowerCase().indexOf(q) > -1);
@@ -1797,54 +1804,146 @@ function progresChartCompact(value, money) {
   return fmt(n);
 }
 
-function progresDayChart(hostId, daily, firstKey, secondKey, money) {
+/* Grafik garis harian (PAR Baru vs PAR Selesai).
+   Lebar mengikuti kotak grafik sehingga seluruh tanggal terlihat tanpa digeser. Sentuh atau arahkan
+   penunjuk ke grafik untuk melihat nilai per tanggal. Isi dipasang lewat DOM/textContent. */
+const PH_CHART_COLORS = { new: '#0a7a5a', done: '#d99e00' };
+
+function progresNiceScale(maxValue, money) {
+  if (!(maxValue > 0)) return { max: 4, ticks: 4 };
+  const steps = money ? [1, 2, 2.5, 5, 10] : [1, 2, 5, 10];
+  let best = null;
+  [4, 5].forEach(ticks => {
+    const raw = maxValue / ticks, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const norm = raw / mag, pick = steps.find(s => norm <= s + 1e-9) || 10;
+    let step = pick * mag;
+    if (!money && step < 1) step = 1;
+    const max = step * ticks;
+    if (!best || max < best.max) best = { max, ticks };
+  });
+  return best;
+}
+
+function progresDayChart(hostId, daily, firstKey, secondKey, money, selectedDate) {
   const host = $(hostId);
   const data = Array.isArray(daily) ? daily : [];
-  if (!data.length) { put(host, h('div', { class: 'ph-chart-empty', text: 'Belum ada data pada bulan berjalan.' })); return; }
+  if (!host) return;
+  host._phChart = { data, firstKey, secondKey, money, selectedDate: selectedDate || '' };
+  host._phW = 0;
+  progresDrawChart(host);
+  if (!host._phObserver && 'ResizeObserver' in window) {
+    host._phObserver = new ResizeObserver(debounce(() => progresDrawChart(host), 90));
+    host._phObserver.observe(host);
+  }
+}
+
+function progresDrawChart(host) {
+  const cfg = host._phChart;
+  if (!cfg) return;
+  const { data, firstKey, secondKey, money, selectedDate } = cfg;
+  if (!data.length) { put(host, h('div', { class: 'ph-chart-empty', text: 'Belum ada data pada bulan berjalan.' })); host._phW = 0; return; }
+  const width = Math.round(host.clientWidth) || 0;
+  if (host._phW === width && host.querySelector('svg')) return;       // lebar sama: tidak perlu menggambar ulang
+  host._phW = width;
+  const W = Math.max(260, width || 560), H = 240;
+  const left = 54, right = 14, top = 14, bottom = 30, plotW = W - left - right, plotH = H - top - bottom;
+  const n = data.length, pad = n > 1 ? 8 : 0;
+  const val = (d, k) => Number(d[k]) || 0;
+  const maxValue = Math.max(0, ...data.map(d => Math.max(val(d, firstKey), val(d, secondKey))));
+  const scale = progresNiceScale(maxValue, money);
+  const xAt = i => n > 1 ? left + pad + i * (plotW - pad * 2) / (n - 1) : left + plotW / 2;
+  const yAt = v => top + plotH - Math.max(0, v) / scale.max * plotH;
+  const stepPx = n > 1 ? (plotW - pad * 2) / (n - 1) : plotW;
+  const markerR = Math.max(2.2, Math.min(4, stepPx * 0.26));
   const ns = 'http://www.w3.org/2000/svg';
-  const width = Math.max(620, data.length * 25 + 82), height = 250;
-  const left = 72, right = 18, top = 16, bottom = 42, plotW = width - left - right, plotH = height - top - bottom;
-  const maxValue = Math.max(0, ...data.map(d => Math.max(Number(d[firstKey]) || 0, Number(d[secondKey]) || 0)));
-  const scaleMax = maxValue > 0 ? maxValue * 1.12 : 1;
-  const step = plotW / data.length, barW = Math.max(3, Math.min(10, step * 0.31));
   const svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
-  svg.setAttribute('width', width); svg.setAttribute('height', height);
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  svg.setAttribute('width', W); svg.setAttribute('height', H);
+  svg.setAttribute('class', 'ph-chart-svg');
   svg.setAttribute('role', 'img');
-  svg.setAttribute('aria-label', money ? 'Grafik Out PAR baru dibanding PAR selesai per hari' : 'Grafik jumlah Client PAR baru dibanding selesai per hari');
-  const add = (tag, attrs, text) => {
+  svg.setAttribute('aria-label', money ? 'Grafik garis Out. PAR baru dibanding selesai per tanggal' : 'Grafik garis jumlah Client PAR baru dibanding selesai per tanggal');
+  const add = (parent, tag, attrs, text) => {
     const e = document.createElementNS(ns, tag);
     Object.keys(attrs || {}).forEach(k => e.setAttribute(k, attrs[k]));
     if (text != null) e.textContent = text;
-    svg.appendChild(e); return e;
+    parent.appendChild(e); return e;
   };
-  for (let t = 0; t <= 4; t++) {
-    const y = top + plotH - (plotH * t / 4), value = scaleMax * t / 4;
-    add('line', { x1: left, y1: y, x2: width - right, y2: y, stroke: '#e5eee9', 'stroke-width': 1 });
-    add('text', { x: left - 9, y: y + 4, fill: '#66796f', 'font-size': 10, 'text-anchor': 'end' }, progresChartCompact(value, money));
+  const selIndex = selectedDate ? data.findIndex(d => d.date === selectedDate) : -1;
+  if (selIndex > -1) {
+    const bw = Math.max(14, stepPx);
+    add(svg, 'rect', { x: xAt(selIndex) - bw / 2, y: top, width: bw, height: plotH, rx: 4, fill: '#e8f5ee' });
   }
-  add('line', { x1: left, y1: top + plotH, x2: width - right, y2: top + plotH, stroke: '#9bb5a8', 'stroke-width': 1.2 });
+  for (let t = 0; t <= scale.ticks; t++) {
+    const y = top + plotH - plotH * t / scale.ticks;
+    add(svg, 'line', { x1: left, y1: y, x2: W - right, y2: y, stroke: t === 0 ? '#9bb5a8' : '#e5eee9', 'stroke-width': t === 0 ? 1.2 : 1 });
+    add(svg, 'text', { x: left - 8, y: y + 3.5, fill: '#66796f', 'font-size': 10, 'text-anchor': 'end' }, progresChartCompact(scale.max * t / scale.ticks, money));
+  }
+  // label tanggal: jarak minimal antar label dijaga agar tidak bertumpuk
+  const every = Math.max(1, Math.ceil(30 / Math.max(stepPx, 1)));
+  let lastLabelX = -Infinity;
   data.forEach((d, i) => {
-    const cx = left + i * step + step / 2;
-    const vals = [Number(d[firstKey]) || 0, Number(d[secondKey]) || 0];
-    const colors = ['#0a7a5a', '#f0c419'];
-    vals.forEach((v, j) => {
-      const bh = Math.max(0, v / scaleMax * plotH);
-      if (bh > 0) {
-        const rect = add('rect', { x: cx + (j === 0 ? -barW - 1 : 1), y: top + plotH - bh, width: barW, height: bh,
-          rx: 2, fill: colors[j], opacity: .94 });
-        const title = document.createElementNS(ns, 'title');
-        title.textContent = d.date + ' · ' + (j === 0 ? 'PAR Baru' : 'PAR Selesai') + ': ' + (money ? rp(v) : fmt(v) + ' Loan No');
-        rect.appendChild(title);
-      }
-    });
-    const day = Number(String(d.date).slice(8, 10));
-    if (day === 1 || day % 3 === 1 || i === data.length - 1) {
-      add('text', { x: cx, y: height - 17, fill: '#66796f', 'font-size': 10, 'text-anchor': 'middle' }, String(day));
-    }
+    const x = xAt(i), isLast = i === n - 1;
+    if (!(i % every === 0 || isLast) || x - lastLabelX < 22) return;
+    lastLabelX = x;
+    add(svg, 'text', { x, y: H - 10, fill: '#66796f', 'font-size': 10, 'text-anchor': 'middle' }, String(Number(String(d.date).slice(8, 10))));
   });
-  const scroller = h('div', { class: 'ph-chart-scroll' });
-  scroller.append(svg); put(host, scroller);
+  const series = [{ key: firstKey, color: PH_CHART_COLORS.new, shape: 'circle' }, { key: secondKey, color: PH_CHART_COLORS.done, shape: 'diamond' }];
+  const points = s => data.map((d, i) => xAt(i).toFixed(1) + ',' + yAt(val(d, s.key)).toFixed(1));
+  const markerAt = (parent, s, x, y, r, attrs) => {
+    if (s.shape === 'circle') return add(parent, 'circle', Object.assign({ cx: x, cy: y, r, fill: s.color, stroke: '#fff', 'stroke-width': 1.5 }, attrs));
+    const q = r * 1.35;
+    return add(parent, 'path', Object.assign({ d: 'M' + x + ' ' + (y - q) + 'L' + (x + q) + ' ' + y + 'L' + x + ' ' + (y + q) + 'L' + (x - q) + ' ' + y + 'Z', fill: s.color, stroke: '#fff', 'stroke-width': 1.5, 'stroke-linejoin': 'round' }, attrs));
+  };
+  series.forEach(s => {
+    if (n > 1) add(svg, 'polyline', { points: points(s).join(' '), fill: 'none', stroke: s.color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' });
+    data.forEach((d, i) => markerAt(svg, s, xAt(i), yAt(val(d, s.key)), markerR));
+  });
+  // lapisan interaktif: garis panduan, penanda aktif, dan kotak informasi
+  const guide = add(svg, 'line', { y1: top, y2: top + plotH, stroke: '#64897a', 'stroke-width': 1, 'stroke-dasharray': '3 3', visibility: 'hidden' });
+  const actives = series.map(s => markerAt(svg, s, 0, 0, markerR + 1.8, { visibility: 'hidden' }));
+  const tipTitle = h('b', { class: 'ph-tip-date' });
+  const tipNew = h('span', { class: 'ph-tip-val' }), tipDone = h('span', { class: 'ph-tip-val' }), tipNet = h('span', { class: 'ph-tip-val' });
+  const tip = h('div', { class: 'ph-chart-tip', hidden: true, role: 'status' }, tipTitle,
+    h('div', { class: 'ph-tip-row' }, h('i', { class: 'new' }), h('span', { text: 'PAR Baru' }), tipNew),
+    h('div', { class: 'ph-tip-row' }, h('i', { class: 'done' }), h('span', { text: 'PAR Selesai' }), tipDone),
+    h('div', { class: 'ph-tip-row net' }, h('span', { class: 'ph-tip-gap' }), h('span', { text: 'Selisih' }), tipNet));
+  const showValue = v => money ? rp(v) : fmt(v) + ' Loan No';
+  const hide = () => { tip.hidden = true; guide.setAttribute('visibility', 'hidden'); actives.forEach(a => a.setAttribute('visibility', 'hidden')); };
+  const show = i => {
+    const d = data[i], x = xAt(i), a = val(d, firstKey), b = val(d, secondKey), net = a - b;
+    guide.setAttribute('x1', x); guide.setAttribute('x2', x); guide.setAttribute('visibility', 'visible');
+    [a, b].forEach((v, j) => {
+      const s = series[j], el = actives[j], y = yAt(v);
+      if (s.shape === 'circle') { el.setAttribute('cx', x); el.setAttribute('cy', y); }
+      else { const q = (markerR + 1.8) * 1.35; el.setAttribute('d', 'M' + x + ' ' + (y - q) + 'L' + (x + q) + ' ' + y + 'L' + x + ' ' + (y + q) + 'L' + (x - q) + ' ' + y + 'Z'); }
+      el.setAttribute('visibility', 'visible');
+    });
+    tipTitle.textContent = String(d.date).split('-').reverse().join('-');
+    tipNew.textContent = showValue(a); tipDone.textContent = showValue(b);
+    tipNet.textContent = (net > 0 ? '+' : '') + showValue(net);
+    tip.hidden = false;
+    const tw = tip.offsetWidth || 170;
+    tip.style.left = Math.max(0, Math.min(W - tw, x + 12 + tw > W ? x - 12 - tw : x + 12)) + 'px';
+  };
+  const indexFrom = e => {
+    const r = svg.getBoundingClientRect(), x = (e.clientX - r.left) * (W / (r.width || W));
+    return Math.max(0, Math.min(n - 1, n > 1 ? Math.round((x - left - pad) / stepPx) : 0));
+  };
+  svg.addEventListener('pointermove', e => { if (e.pointerType !== 'touch' || e.buttons) show(indexFrom(e)); });
+  svg.addEventListener('pointerdown', e => show(indexFrom(e)));
+  svg.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') hide(); });
+  host.style.setProperty('--ph-chart-w', W + 'px');
+  put(host, svg, tip);
+  if (!progresDrawChart.docBound) {
+    progresDrawChart.docBound = true;      // sentuh di luar grafik menutup kotak informasi
+    document.addEventListener('pointerdown', e => {
+      document.querySelectorAll('.ph-chart-host .ph-chart-tip').forEach(t => { if (!t.parentNode.contains(e.target)) { t.hidden = true; } });
+      document.querySelectorAll('.ph-chart-host').forEach(hh => { if (!hh.contains(e.target)) {
+        const g = hh.querySelector('line[stroke-dasharray]'); if (g) g.setAttribute('visibility', 'hidden');
+        hh.querySelectorAll('.ph-chart-svg [visibility="visible"]').forEach(a => a.setAttribute('visibility', 'hidden'));
+      } });
+    });
+  }
 }
 
 function progresRenderRanking(hostId, rows, kind) {
@@ -1884,13 +1983,204 @@ function progresRenderTopUp(data) {
   const unknown = data.unknownTopUp || { newCount: 0, doneCount: 0 };
   $('ph-topup-note').textContent = (unknown.newCount || unknown.doneCount)
     ? 'Ada nilai Top Up di luar tiga kategori yang diminta: ' + fmt(unknown.newCount) + ' baris PAR Baru dan ' + fmt(unknown.doneCount) + ' baris PAR Selesai. Nilai tersebut tetap masuk kartu total dan grafik, tetapi tidak dimasukkan ke tabel tiga kategori.'
-    : 'Seluruh data dengan Loan No pada bulan berjalan memiliki kategori TOP UP yang sesuai dengan tiga kategori di atas.';
+    : 'Seluruh data dengan Loan No pada cakupan filter terpilih memiliki kategori TOP UP yang sesuai dengan tiga kategori di atas.';
 }
 
-function paintProgresHarian(data) {
+function selectProgresRecap(kind) {
+  const active = kind === 'done' ? 'done' : 'new';
+  const showNew = active === 'new';
+  const newPanel = $('ph-new-recap-panel'), donePanel = $('ph-done-recap-panel');
+  if (!newPanel || !donePanel) return;
+  const changed = state.progressRecap !== active;
+  state.progressRecap = active;
+  newPanel.hidden = !showNew;
+  donePanel.hidden = showNew;
+  document.querySelectorAll('[data-ph-recap]').forEach(button => {
+    const selected = button.dataset.phRecap === active;
+    button.classList.toggle('is-active', selected);
+    button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+    button.setAttribute('aria-selected', selected ? 'true' : 'false');
+  });
+  const note = $('ph-recap-context');
+  if (note) note.textContent = showNew
+    ? 'Menampilkan daftar Loan No yang masuk ke arsip PAR Baru.'
+    : 'Menampilkan daftar Loan No yang masuk ke arsip PAR Selesai.';
+  if (changed) state.progressDetailPage = 1;
+  if (state.progress) loadProgresDetail(state.progressDetailPage || 1);
+}
+
+function progresRenderLoanDetails(result) {
+  const kind = result.kind === 'done' ? 'done' : 'new';
+  const table = $(kind === 'new' ? 'ph-new-recap-table' : 'ph-done-recap-table');
+  const label = kind === 'new' ? 'PAR Baru' : 'PAR Selesai';
+  if (!table) return;
+  const headers = ['No.', 'Tanggal Progress', 'Cabang', 'Loan No', 'TOP UP', 'Total Balance'];
+  const thead = h('thead', {}, h('tr', {}, ...headers.map(x => h('th', { text: x }))));
+  const tbody = h('tbody', {});
+  const records = result.records || [];
+  if (!records.length) {
+    tbody.append(h('tr', {}, h('td', { colspan: 6, class: 'ph-recap-empty-cell', text: 'Tidak ada daftar Loan No ' + label + ' pada filter ini.' })));
+  } else {
+    records.forEach((r, i) => {
+      const number = (result.page - 1) * result.pageSize + i + 1;
+      tbody.append(h('tr', {},
+        h('td', { class: 'ph-recap-no', text: fmt(number) }),
+        h('td', { text: progresFilterDateLabel(r.progressDate || '') }),
+        h('th', { scope: 'row', text: r.branch || '-' }),
+        h('td', { class: 'ph-loan-no', text: r.loanNo || '-' }),
+        h('td', { text: r.topUp || '-' }),
+        h('td', { class: 'ph-detail-amount', text: rp(r.totalBalance || 0) })
+      ));
+    });
+  }
+  put(table, thead, tbody);
+  const total = Number(result.totalRecords) || 0;
+  const page = Math.max(1, Number(result.page) || 1);
+  const pageSize = Math.max(1, Number(result.pageSize) || 50);
+  const pages = Math.max(1, Number(result.totalPages) || 1);
+  const from = total ? ((page - 1) * pageSize + 1) : 0;
+  const to = Math.min(total, page * pageSize);
+  $('ph-detail-pager-info').textContent = total
+    ? 'Menampilkan ' + fmt(from) + '–' + fmt(to) + ' dari ' + fmt(total) + ' Loan No ' + label + '.'
+    : 'Tidak ada Loan No ' + label + ' untuk filter yang dipilih.';
+  $('ph-detail-page-label').textContent = 'Halaman ' + fmt(page) + ' / ' + fmt(pages);
+  $('ph-detail-prev').disabled = page <= 1;
+  $('ph-detail-next').disabled = page >= pages;
+  $('ph-detail-note').textContent = 'Daftar diurutkan berdasarkan cabang dan Loan No. Data dibatasi sesuai filter serta hak akses Wilayah Kerja.';
+}
+
+function progresSetDetailLoading(kind, message) {
+  const table = $(kind === 'done' ? 'ph-done-recap-table' : 'ph-new-recap-table');
+  if (!table) return;
+  const title = kind === 'done' ? 'PAR Selesai' : 'PAR Baru';
+  put(table,
+    h('thead', {}, h('tr', {}, h('th', { text: 'No.' }), h('th', { text: 'Tanggal Progress' }), h('th', { text: 'Cabang' }), h('th', { text: 'Loan No' }), h('th', { text: 'TOP UP' }), h('th', { text: 'Total Balance' }))),
+    h('tbody', {}, h('tr', {}, h('td', { colspan: 6, class: 'ph-recap-empty-cell', text: message || 'Memuat daftar ' + title + '…' }))));
+}
+
+async function loadProgresDetail(page) {
+  if (!state.user || !state.progress) return;
+  const kind = state.progressRecap === 'done' ? 'done' : 'new';
+  const requestId = ++state.progressDetailSeq;
+  const nextPage = Math.max(1, Number(page) || 1);
+  state.progressDetailPage = nextPage;
+  const filters = state.progressFilters || { branch: '', progressDate: '', coordinatorNik: '' };
+  progresSetDetailLoading(kind, 'Memuat daftar Loan No…');
+  $('ph-detail-prev').disabled = true;
+  $('ph-detail-next').disabled = true;
+  $('ph-detail-pager-info').textContent = 'Memuat daftar ' + (kind === 'new' ? 'PAR Baru' : 'PAR Selesai') + '…';
+  try {
+    const result = await api('webProgresHarianDetail', {
+      token: (session.get() || {}).token,
+      kind: kind,
+      branch: filters.branch || '',
+      progressDate: filters.progressDate || '',
+      coordinatorNik: filters.coordinatorNik || '',
+      page: nextPage,
+      pageSize: 50
+    }, { retry: true });
+    if (requestId !== state.progressDetailSeq) return;
+    if (result.code === 'SESSION_REQUIRED') return logout(result.error);
+    if (!result.ok) throw new Error(result.error || 'Gagal mengambil daftar Loan No.');
+    state.progressDetailResult = result;
+    state.progressDetailPage = result.page || nextPage;
+    progresRenderLoanDetails(result);
+    $('ph-detail-note').textContent = result.filterDescription
+      ? 'Filter: ' + result.filterDescription + ' · ' + (result.scope || 'Sesuai Wilayah Kerja')
+      : 'Daftar dibatasi sesuai filter dan hak akses Wilayah Kerja.';
+  } catch (err) {
+    if (requestId !== state.progressDetailSeq) return;
+    progresSetDetailLoading(kind, err && err.message ? err.message : 'Gagal memuat daftar Loan No.');
+    $('ph-detail-pager-info').textContent = 'Daftar Loan No belum dapat dimuat.';
+    $('ph-detail-note').textContent = err && err.message ? err.message : 'Periksa koneksi lalu coba lagi.';
+  }
+}
+
+function progresRenderBranchRecap(hostId, noteId, rows, kind, totals, isSingleDay) {
+  const table = $(hostId);
+  const countKey = kind === 'new' ? 'newCount' : 'doneCount';
+  const balanceKey = kind === 'new' ? 'newBalance' : 'doneBalance';
+  const list = (rows || []).slice().filter(r => (Number(r[countKey]) || 0) || (Number(r[balanceKey]) || 0))
+    .sort((a, b) => (Number(b[balanceKey]) - Number(a[balanceKey]))
+      || (Number(b[countKey]) - Number(a[countKey]))
+      || String(a.branch || '').localeCompare(String(b.branch || ''), 'id', { sensitivity: 'base', numeric: true }));
+  const thead = h('thead', {}, h('tr', {},
+    h('th', { text: 'No.' }), h('th', { text: 'Cabang' }),
+    h('th', { text: 'Client PAR · Loan No' }), h('th', { text: 'Out. PAR · Total Balance' })));
+  const tbody = h('tbody', {});
+  if (!list.length) {
+    tbody.append(h('tr', {}, h('td', { colspan: 4, class: 'ph-recap-empty-cell', text: 'Tidak ada data PAR ' + (kind === 'new' ? 'Baru' : 'Selesai') + ' pada filter ini.' })));
+  } else {
+    list.forEach((r, i) => tbody.append(h('tr', {},
+      h('td', { class: 'ph-recap-no', text: fmt(i + 1) }),
+      h('th', { scope: 'row', text: r.branch || '-' }),
+      h('td', { text: fmt(r[countKey] || 0) }),
+      h('td', { text: rp(r[balanceKey] || 0) }))));
+  }
+  const totalCount = totals ? Number(totals[countKey]) || 0 : list.reduce((sum, r) => sum + (Number(r[countKey]) || 0), 0);
+  const totalBalance = totals ? Number(totals[balanceKey]) || 0 : list.reduce((sum, r) => sum + (Number(r[balanceKey]) || 0), 0);
+  const tfoot = h('tfoot', {}, h('tr', {},
+    h('th', { colspan: 2, text: 'TOTAL ' + fmt(list.length) + ' CABANG' }),
+    h('td', { text: fmt(totalCount) }), h('td', { text: rp(totalBalance) })));
+  put(table, thead, tbody, tfoot);
+  const period = isSingleDay ? 'tanggal progress terpilih' : 'bulan berjalan';
+  $(noteId).textContent = 'Diurutkan berdasarkan Out. PAR tertinggi. Menampilkan ' + fmt(list.length) + ' cabang pada ' + period + ' sesuai filter dan Wilayah Kerja.';
+}
+
+function progresFilterDateLabel(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+  return m ? m[1] + ' ' + (MONTHS_ID[Number(m[2]) - 1] || m[2]) + ' ' + m[3] : iso || '';
+}
+
+function progresFillSelect(id, firstLabel, rows, valueOf, labelOf, selected) {
+  const select = $(id), options = [h('option', { value: '', text: firstLabel })];
+  (rows || []).forEach(row => options.push(h('option', { value: valueOf(row), text: labelOf(row) })));
+  select.replaceChildren(...options);
+  const exists = Array.from(select.options).some(o => o.value === (selected || ''));
+  select.value = exists ? (selected || '') : '';
+  select.disabled = !(rows && rows.length);
+  return select.value;
+}
+
+function paintProgresFilterControls(data) {
+  const opts = data.filterOptions || {};
+  const filters = data.filters || {};
+  const branch = progresFillSelect('ph-filter-branch', 'Semua Cabang', opts.branches || [], x => x.name, x => x.name, filters.branch || '');
+  const date = progresFillSelect('ph-filter-date', 'Semua Tanggal · Bulan Berjalan', opts.dates || [], x => x, progresFilterDateLabel, filters.progressDate || '');
+  const coordinator = progresFillSelect('ph-filter-user', 'Semua Branch Coordinator', opts.coordinators || [], x => x.nik, x => x.name, filters.coordinatorNik || '');
+  state.progressFilters = { branch: branch, progressDate: date, coordinatorNik: coordinator };
+  const userIsBC = state.user && String(state.user.jabatan || '').trim().toUpperCase().replace(/\s+/g, ' ') === 'BRANCH COORDINATOR';
+  $('ph-filter-note').textContent = userIsBC
+    ? 'Pilihan filter dibatasi pada cabang dalam Wilayah Kerja Anda. Data di luar wilayah tidak dikirim ke browser.'
+    : 'Pilihan filter Branch Coordinator dan cabang mengikuti Wilayah Kerja akun yang sedang login.';
+}
+
+function changeProgresFilter(field, value) {
+  state.progressFilterRevision++;
+  state.progressFilters = state.progressFilters || { branch: '', progressDate: '', coordinatorNik: '' };
+  state.progressFilters[field] = value || '';
+  if (field === 'coordinatorNik') {
+    state.progressFilters.branch = '';
+    state.progressFilters.progressDate = '';
+  } else if (field === 'branch') {
+    state.progressFilters.progressDate = '';
+  }
+  loadProgresHarian({ filterChange: true });
+}
+
+function paintProgresHarian(data, preservePendingFilters) {
+  if (!preservePendingFilters) paintProgresFilterControls(data);
   $('ph-meta').textContent = data.monthLabel + ' · periode ' + fmtStamp(data.monthKey + '-01') + ' s.d. ' + fmtStamp(data.asOf)
-    + ' · sumber: PAR Baru dan PAR Selesai';
+    + ' · sumber: PAR Baru dan PAR Selesai' + (data.filterDescription ? ' · filter: ' + data.filterDescription : '');
   $('ph-scope').textContent = data.scope || 'Sesuai Wilayah Kerja';
+  const isSingleDay = !!(data.filters && data.filters.progressDate);
+  $('ph-net-balance').previousElementSibling.textContent = isSingleDay ? 'Selisih Out. PAR pada tanggal terpilih' : 'Selisih Out. PAR bulan berjalan';
+  $('ph-net-count').previousElementSibling.textContent = isSingleDay ? 'Selisih Client PAR pada tanggal terpilih' : 'Selisih Client PAR bulan berjalan';
+  const topUpEyebrow = document.querySelector('#p-progress .ph-topup-panel .eyebrow');
+  if (topUpEyebrow) topUpEyebrow.textContent = isSingleDay ? 'REKAP TANGGAL TERPILIH' : 'KOMULATIF BULAN BERJALAN';
+  const chartCaptions = document.querySelectorAll('#p-progress .ph-chart-panel .ph-panel-head p');
+  if (chartCaptions[0]) chartCaptions[0].textContent = isSingleDay ? 'Total Balance seluruh tanggal bulan berjalan; tanggal terpilih ditandai.' : 'Nilai Total Balance per tanggal progress.';
+  if (chartCaptions[1]) chartCaptions[1].textContent = isSingleDay ? 'Loan No seluruh tanggal bulan berjalan; tanggal terpilih ditandai.' : 'Jumlah Loan No per tanggal progress.';
   $('ph-new-balance').textContent = rpShort(data.totals.newBalance);
   $('ph-new-balance').title = rp(data.totals.newBalance);
   $('ph-new-count').textContent = fmt(data.totals.newCount);
@@ -1907,9 +2197,13 @@ function paintProgresHarian(data) {
   $('ph-net-count-note').textContent = netCount > 0 ? 'Loan No baru lebih banyak daripada yang selesai' : netCount < 0 ? 'Loan No selesai lebih banyak daripada yang baru' : 'Jumlah Loan No seimbang';
   progresRenderRanking('ph-top-new', data.topNew, 'new');
   progresRenderRanking('ph-top-done', data.topDone, 'done');
-  progresDayChart('ph-chart-out', data.daily, 'newBalance', 'doneBalance', true);
-  progresDayChart('ph-chart-client', data.daily, 'newCount', 'doneCount', false);
+  const chartDaily = Array.isArray(data.dailyChart) ? data.dailyChart : data.daily;   // dailyChart: seluruh tanggal bulan berjalan
+  const chartDate = data.filters && data.filters.progressDate;
+  progresDayChart('ph-chart-out', chartDaily, 'newBalance', 'doneBalance', true, chartDate);
+  progresDayChart('ph-chart-client', chartDaily, 'newCount', 'doneCount', false, chartDate);
   progresRenderTopUp(data);
+  state.progressDetailPage = 1;
+  loadProgresDetail(1);
 
   const warnings = [];
   if (data.scopeMessage) warnings.push(data.scopeMessage);
@@ -1924,31 +2218,44 @@ function paintProgresHarian(data) {
 }
 
 async function loadProgresHarian(options) {
-  if (state.progressLoading || !state.user) return;
+  if (!state.user) return;
+  if (state.progressLoading) {
+    if (options && options.filterChange) state.progressReloadPending = true;
+    return;
+  }
   const automatic = !!(options && options.automatic);
+  const requestedFilterRevision = state.progressFilterRevision;
   state.progressLoading = true;
   $('ph-refresh').disabled = true; $('ph-export').disabled = true;
   if (!automatic) $('ph-sync').textContent = 'Mengambil arsip PAR Baru dan PAR Selesai…';
   setNote('ph-msg', '');
   try {
     if (automatic && !reserveAutoSync()) return;
-    const r = await api('webProgresHarian', { token: (session.get() || {}).token }, { retry: true });
+    const filters = state.progressFilters || { branch: '', progressDate: '', coordinatorNik: '' };
+    const r = await api('webProgresHarian', {
+      token: (session.get() || {}).token,
+      branch: filters.branch || '', progressDate: filters.progressDate || '', coordinatorNik: filters.coordinatorNik || ''
+    }, { retry: true });
     if (r.code === 'SESSION_REQUIRED') return logout(r.error);
     if (!r.ok) {
-      state.progress = null;
+      state.progress = null; state.progressDetailSeq++; state.progressDetailResult = null;
       $('ph-meta').textContent = 'Progres Harian gagal dimuat.';
       $('ph-notice').hidden = false; $('ph-notice').textContent = r.error || 'Terjadi kesalahan saat mengambil data.';
       $('ph-sync').textContent = '';
       return;
     }
     state.progress = r; state.progressLoadedAt = Date.now();
-    paintProgresHarian(r);
+    paintProgresHarian(r, requestedFilterRevision !== state.progressFilterRevision);
   } catch (err) {
     $('ph-notice').hidden = false;
     $('ph-notice').textContent = err && err.message ? err.message : 'Jaringan tidak dapat dihubungi. Periksa koneksi lalu muat ulang.';
   } finally {
     state.progressLoading = false; $('ph-refresh').disabled = false;
     $('ph-export').disabled = !state.progress;
+    if (state.progressReloadPending) {
+      state.progressReloadPending = false;
+      loadProgresHarian({ filterChange: true });
+    }
   }
 }
 
@@ -1990,11 +2297,14 @@ async function exportProgresHarian() {
   try {
     await Promise.all([loadXLSX(), nextFrame()]);
     const wb = XLSX.utils.book_new(), add = (name, ws) => XLSX.utils.book_append_sheet(wb, ws, name);
-    const sub = 'Periode ' + d.monthLabel + ' · s.d. ' + fmtStamp(d.asOf) + ' · ' + d.scope;
+    const sub = 'Periode ' + d.monthLabel + ' · s.d. ' + fmtStamp(d.asOf) + ' · ' + d.scope + (d.filterDescription ? ' · Filter: ' + d.filterDescription : '');
     const summaryRows = [
       ['PAR Baru · Client PAR', d.totals.newCount], ['PAR Baru · Out. PAR', d.totals.newBalance],
       ['PAR Selesai · Client PAR', d.totals.doneCount], ['PAR Selesai · Out. PAR', d.totals.doneBalance],
-      ['Selisih Client PAR', d.netCount], ['Selisih Out. PAR', d.netBalance]
+      ['Selisih Client PAR', d.netCount], ['Selisih Out. PAR', d.netBalance],
+      ['Filter Cabang', (d.filters && d.filters.branch) || 'Semua Cabang'],
+      ['Filter Tanggal Progress', (d.filters && d.filters.progressDate) || 'Semua Tanggal'],
+      ['Filter Branch Coordinator', (d.filters && d.filters.coordinatorName) || 'Semua Branch Coordinator']
     ];
     add('Ringkasan', progresExcelSheet('PROGRES HARIAN', sub, ['Indikator', 'Nilai'], summaryRows, [38, 24], [1]));
     add('Top 3 PAR Baru', progresExcelSheet('3 CABANG KENAIKAN TERTINGGI', sub, ['Cabang', 'Client PAR / Loan No', 'Out. PAR'],
@@ -2020,6 +2330,18 @@ async function exportProgresHarian() {
     add('Per Cabang', progresExcelSheet('REKAP PROGRES PER CABANG', sub,
       ['Cabang', 'PAR Baru · Client', 'PAR Baru · Out. PAR', 'PAR Selesai · Client', 'PAR Selesai · Out. PAR'],
       branchRows, [38, 20, 24, 24, 24], [1, 2, 3, 4]));
+    const recapNewRows = (d.branches || []).slice().sort((a, b) => (Number(b.newBalance) - Number(a.newBalance)) || (Number(b.newCount) - Number(a.newCount)) || String(a.branch || '').localeCompare(String(b.branch || ''), 'id', { sensitivity: 'base', numeric: true }))
+      .filter(x => (Number(x.newCount) || 0) || (Number(x.newBalance) || 0))
+      .map((x, i) => [i + 1, x.branch, x.newCount, x.newBalance]);
+    recapNewRows.push(['TOTAL', '', d.totals.newCount, d.totals.newBalance]);
+    const recapDoneRows = (d.branches || []).slice().sort((a, b) => (Number(b.doneBalance) - Number(a.doneBalance)) || (Number(b.doneCount) - Number(a.doneCount)) || String(a.branch || '').localeCompare(String(b.branch || ''), 'id', { sensitivity: 'base', numeric: true }))
+      .filter(x => (Number(x.doneCount) || 0) || (Number(x.doneBalance) || 0))
+      .map((x, i) => [i + 1, x.branch, x.doneCount, x.doneBalance]);
+    recapDoneRows.push(['TOTAL', '', d.totals.doneCount, d.totals.doneBalance]);
+    add('PAR Baru', progresExcelSheet('REKAP PAR BARU PER CABANG', sub,
+      ['No.', 'Cabang', 'Client PAR · Loan No', 'Out. PAR · Total Balance'], recapNewRows, [8, 38, 24, 26], [2, 3]));
+    add('PAR Selesai', progresExcelSheet('REKAP PAR SELESAI PER CABANG', sub,
+      ['No.', 'Cabang', 'Client PAR · Loan No', 'Out. PAR · Total Balance'], recapDoneRows, [8, 38, 24, 26], [2, 3]));
     add('Petunjuk', progresExcelSheet('PETUNJUK LAPORAN', sub, ['Istilah', 'Keterangan'], [
       ['Sumber', 'Sheet PAR Baru dan PAR Selesai.'],
       ['Periode', 'Tanggal Progress dari tanggal 1 bulan berjalan sampai tanggal proses laporan.'],
@@ -2031,7 +2353,7 @@ async function exportProgresHarian() {
       ['TOP UP lainnya', 'Nilai TOP UP di luar NON TOP-UP, REGULER, dan KHUSUS tetap masuk total utama namun tidak masuk tabel tiga kategori.']
     ], [24, 100], []));
     XLSX.writeFile(wb, 'Progres_Harian_' + d.monthKey + '.xlsx');
-    setNote('ph-msg', 'Laporan Excel berhasil dibuat (8 sheet).', 'good');
+    setNote('ph-msg', 'Laporan Excel berhasil dibuat (10 sheet).', 'good');
   } catch (err) {
     setNote('ph-msg', err && err.message ? err.message : 'Gagal membuat laporan Excel.', 'bad');
   } finally { btn.disabled = false; }
@@ -2564,8 +2886,18 @@ function bind() {
   $('rb-setting-date').addEventListener('input', () => { $('rb-setting-date').classList.remove('bad'); setNote('rb-setting-msg', ''); });
 
   // Dashboard Progres Harian
+  document.querySelectorAll('[data-ph-recap]').forEach(button => {
+    button.addEventListener('click', () => selectProgresRecap(button.dataset.phRecap));
+  });
+  $('ph-detail-prev').onclick = () => loadProgresDetail(Math.max(1, state.progressDetailPage - 1));
+  $('ph-detail-next').onclick = () => loadProgresDetail(state.progressDetailPage + 1);
+  selectProgresRecap('new');
   $('ph-refresh').onclick = () => loadProgresHarian();
   $('ph-export').onclick = exportProgresHarian;
+  $('ph-filter-branch').onchange = () => changeProgresFilter('branch', $('ph-filter-branch').value);
+  $('ph-filter-date').onchange = () => changeProgresFilter('progressDate', $('ph-filter-date').value);
+  $('ph-filter-user').onchange = () => changeProgresFilter('coordinatorNik', $('ph-filter-user').value);
+  $('ph-filter-reset').onclick = () => { state.progressFilterRevision++; state.progressFilters = { branch: '', progressDate: '', coordinatorNik: '' }; loadProgresHarian({ filterChange: true }); };
 
   // Dashboard Analisa Cabang
   $('an-refresh').onclick = () => loadAnalisaCabang();
@@ -2610,7 +2942,7 @@ function bind() {
   $('detail').addEventListener('click', e => { if (e.target === $('detail')) $('detail').close(); });   // klik di luar kotak = tutup
 
   // Ringkasan
-  document.querySelectorAll('.seg button').forEach(b => { b.onclick = () => { state.sumBy = b.dataset.g; state.sumSort = { key: 'n', dir: -1 }; drawSummary(); }; });
+  document.querySelectorAll('#p-sum .seg button[data-g]').forEach(b => { b.onclick = () => { state.sumBy = b.dataset.g; state.sumSort = { key: 'n', dir: -1 }; drawSummary(); }; });
   $('sq').addEventListener('input', debounce(() => { state.sumQ = $('sq').value; drawSummary(); }, 150));
   $('stbl').addEventListener('click', e => {
     const th = e.target.closest('.th');
