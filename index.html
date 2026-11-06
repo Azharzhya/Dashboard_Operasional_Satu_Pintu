@@ -256,9 +256,16 @@
         <div class="page-heading summary-heading">
           <div><div class="eyebrow"><span class="eyebrow-dot"></span> IKHTISAR PORTOFOLIO</div>
             <h1 class="ph">Ringkasan</h1>
-            <p class="lead">Jumlah pinjaman tiap kategori. Pilih nama atau angka untuk membuka daftarnya.</p>
+            <p class="lead">Ikhtisar pinjaman per cabang/staf dan buletin kabar operasional Regional J.</p>
+          </div>
+          <div class="summary-news-action">
+            <button class="btn primary image-download-btn" id="sum-news-img" type="button" disabled hidden>
+              <span class="btn-icon" aria-hidden="true">▧</span><span class="btn-label">Unduh Gambar Kabar</span>
+            </button>
+            <span class="summary-news-caption">Apa kabar Regional J?</span>
           </div>
         </div>
+        <p id="sum-news-msg" class="note summary-news-note" role="status" aria-live="polite"></p>
         <div class="dtools">
           <div class="seg" role="group" aria-label="Kelompokkan berdasarkan">
             <button type="button" data-g="branch" aria-pressed="true">Per cabang</button>
@@ -270,7 +277,7 @@
         <p id="smsg" class="note" role="status"></p>
       </div>
 
-      <!-- Dashboard Progres Harian: rekap bulanan dari arsip PAR Baru dan PAR Selesai -->
+      <!-- Dashboard Progres Harian: rekap lintas bulan dari arsip PAR Baru, PAR Selesai, dan pergerakan angsuran -->
       <div id="p-progress" class="set-page" role="tabpanel" aria-labelledby="t-dashboard" hidden>
         <div class="dhead page-heading">
           <div>
@@ -288,18 +295,19 @@
 
         <section class="ph-filter-panel" aria-label="Filter Progres Harian">
           <div class="ph-filter-head">
-            <div><span class="eyebrow">PENYARINGAN DATA</span><h2>Filter Progres</h2><p>Sesuaikan ringkasan, peringkat cabang, grafik, dan laporan Excel.</p></div>
+            <div><span class="eyebrow">PENYARINGAN DATA</span><h2>Filter Progres</h2><p>Filter Bulan membatasi pilihan Tanggal Progress. Pilih Semua untuk melihat seluruh riwayat.</p></div>
             <button class="btn ghost sm" id="ph-filter-reset" type="button">Reset filter</button>
           </div>
           <div class="ph-filter-grid">
+            <label class="ph-filter-field"><span>Bulan</span><select id="ph-filter-month"><option value="">Semua Bulan</option></select></label>
             <label class="ph-filter-field"><span>Cabang</span><select id="ph-filter-branch"><option value="">Semua Cabang</option></select></label>
-            <label class="ph-filter-field"><span>Tanggal Progress</span><select id="ph-filter-date"><option value="">Semua Tanggal · Bulan Berjalan</option></select></label>
+            <label class="ph-filter-field"><span>Tanggal Progress</span><select id="ph-filter-date"><option value="">Semua Tanggal</option></select></label>
             <label class="ph-filter-field"><span>User · Branch Coordinator</span><select id="ph-filter-user"><option value="">Semua Branch Coordinator</option></select></label>
           </div>
-          <p id="ph-filter-note" class="ph-filter-note">Filter cabang dan user mengikuti cakupan Wilayah Kerja akun yang sedang login.</p>
+          <p id="ph-filter-note" class="ph-filter-note">Filter bulan menentukan pilihan Tanggal Progress. Keduanya default Semua dan tetap mengikuti cakupan Wilayah Kerja akun.</p>
         </section>
 
-        <div class="ph-primary-grid" aria-label="Ringkasan PAR bulan berjalan">
+        <div class="ph-primary-grid" aria-label="Ringkasan PAR sesuai filter">
           <article class="ph-primary-card ph-new-card">
             <div class="ph-card-top"><span class="ph-card-label">PAR BARU · PENINGKATAN</span><span class="ph-card-mark">↑</span></div>
             <strong class="ph-card-amount" id="ph-new-balance">—</strong>
@@ -315,10 +323,22 @@
         </div>
 
         <div class="ph-net-strip">
-          <div><span class="ph-net-label">Selisih Out. PAR bulan berjalan</span><b id="ph-net-balance">—</b><small id="ph-net-balance-note">PAR Baru dikurangi PAR Selesai</small></div>
+          <div><span class="ph-net-label">Selisih Out. PAR</span><b id="ph-net-balance">—</b><small id="ph-net-balance-note">PAR Baru dikurangi PAR Selesai</small></div>
           <div><span class="ph-net-label">Selisih Client PAR</span><b id="ph-net-count">—</b><small id="ph-net-count-note">Jumlah Loan No baru dikurangi selesai</small></div>
           <span class="ph-scope" id="ph-scope">Sesuai Wilayah Kerja</span>
         </div>
+        <section class="ph-movement-kpi" aria-label="Penurunan Outstanding PAR by Angsuran">
+          <div class="ph-movement-kpi-main">
+            <span class="eyebrow">REKENING BERGERAK · ANGSURAN</span>
+            <h2>Penurunan Outstanding PAR by Angsuran</h2>
+            <p>Akumulasi bersih perubahan Total Balance (saldo Data_Upload lama dikurangi Excel terbaru) untuk Loan No yang tetap muncul pada unggahan berikutnya.</p>
+          </div>
+          <div class="ph-movement-kpi-value">
+            <strong id="ph-movement-balance">—</strong>
+            <span id="ph-movement-period">Kumulatif semua bulan dan tanggal</span>
+            <small id="ph-movement-note">Nilai positif merupakan penurunan saldo.</small>
+          </div>
+        </section>
 
         <div id="ph-notice" class="ph-notice" role="status" hidden></div>
 
@@ -525,11 +545,15 @@
         <section id="updiff" class="updiff" hidden aria-live="polite">
           <h2>Hasil pemeriksaan LOAN NO</h2>
           <div id="updiffstats" class="stats"></div>
-          <div class="updiff-grid">
+          <div id="updiff-audit-wrap" hidden>
+            <div class="tw"><table id="updiff-audit"></table></div>
+            <small class="updiff-note">Hanya Loan No yang ada di Data_Upload lama <b>dan</b> Excel baru. Selisih = Data_Upload lama − Excel baru: <b>positif</b> = saldo turun, <b>negatif</b> = saldo naik. Angka ini sama dengan jumlah kolom tanggal unggahan ini pada sheet Rekening_Bergerak_*.</small>
+          </div>
+          <div id="updiff-grid" class="updiff-grid">
             <div><b>Contoh LOAN NO Baru</b><p id="updiff-new-samples" class="updiff-samples">Tidak ada.</p><small>Baris lengkap dari Excel akan ditambahkan ke sheet <b>PAR Baru</b>.</small></div>
             <div><b>Contoh LOAN NO Selesai</b><p id="updiff-done-samples" class="updiff-samples">Tidak ada.</p><small>Baris lengkap dari <b>Data_Upload</b> akan ditambahkan ke sheet <b>PAR Selesai</b>.</small></div>
           </div>
-          <p class="updiff-help">Data_Upload lama belum diubah. Periksa hasil di atas, lalu konfirmasi untuk menyimpan arsip dan mengganti Data_Upload.</p>
+          <p id="updiff-help" class="updiff-help">Data_Upload lama belum diubah. Periksa hasil di atas, lalu konfirmasi untuk menyimpan arsip dan mengganti Data_Upload.</p>
         </section>
         <div class="bar" id="upbar" hidden><i id="upfill"></i></div>
         <p id="upmsg" class="note" role="status"></p>
@@ -545,17 +569,17 @@
           <h1 class="ph">Versi &amp; Changelog</h1>
           <p class="lead">Catatan fitur, penyempurnaan, dan perbaikan Dashboard Operasional Satu Pintu dari fondasi awal hingga rilis saat ini.</p>
         </div>
-        <span class="version-current"><i></i> Versi saat ini <b>v.20.05</b></span>
+        <span class="version-current"><i></i> Versi saat ini <b>v.20.17</b></span>
       </div>
 
       <section class="version-overview" aria-label="Ringkasan versi saat ini">
         <div class="version-overview-main">
           <span class="version-overview-label">RILIS TERBARU</span>
-          <strong>Dashboard Operasional Satu Pintu v.20.05</strong>
-          <p>Hak akses tombol Gambar F4 berdasarkan tingkat akun, dengan pengaturan Enable Download khusus Administrator.</p>
+          <strong>Dashboard Operasional Satu Pintu v.20.17</strong>
+          <p>Pemeriksaan upload PAR besar kini berjalan bertahap dan dapat dilanjutkan setelah timeout tanpa mengirim ulang staging. Reset database operasional tetap tersedia; pemeriksaan selisih simpanan nonaktif dan Rekening Bergerak tetap khusus Total Balance.</p>
         </div>
-        <div class="version-overview-stat"><strong>20.05</strong><span>Versi terbaru</span></div>
-        <div class="version-overview-stat"><strong>20 + 1</strong><span>Catatan rilis &amp; fondasi</span></div>
+        <div class="version-overview-stat"><strong>20.17</strong><span>Versi terbaru</span></div>
+        <div class="version-overview-stat"><strong>20 + 2</strong><span>Catatan rilis &amp; fondasi</span></div>
       </section>
 
       <div class="version-toolbar">
@@ -565,7 +589,123 @@
 
       <div id="version-list" class="version-list">
         <details class="version-item" open>
-          <summary><span class="version-marker latest">20.05</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.05</b><small>Pengaturan hak akses Download Gambar F4 berdasarkan tingkat akun</small></span><span class="version-tag">AKSES</span></summary>
+          <summary><span class="version-marker latest">20.17</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.17</b><small>Pemeriksaan upload bertahap dan pemulihan sesi staging setelah timeout</small></span><span class="version-tag">UPLOAD · ANTI-TIMEOUT</span></summary>
+          <div class="version-body"><ul>
+            <li>Pemeriksaan Loan No dan Total Balance pada unggahan PAR besar dipecah menjadi batch 3.000 baris per permintaan server agar satu eksekusi tidak perlu memproses seluruh 20 ribu baris sekaligus.</li>
+            <li>Checkpoint pemeriksaan disimpan per batch. Jika server atau koneksi timeout, tombol Periksa LOAN NO dapat melanjutkan dari offset terakhir menggunakan staging yang sama.</li>
+            <li>webUploadStart dapat memulihkan sesi upload aktif yang cocok dengan pengguna, nama file, ukuran, waktu modifikasi file, dan jumlah baris; file tidak perlu dikirim ulang setelah halaman dimuat ulang.</li>
+            <li>Penulisan staging perbandingan menggunakan posisi tetap sehingga retry tidak menggandakan baris. Jalur audit, PAR Baru/Selesai, dan Rekening Bergerak tetap hanya memakai Total Balance; pemeriksaan simpanan tetap nonaktif.</li>
+            <li>Baris baseline tambahan pada log pergerakan baru tidak lagi dibuat karena nilai awal sudah tersimpan pada baris perbandingan/missing/first-seen masing-masing Loan No.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">20.16</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.16</b><small>Reset database operasional dan invalidasi cache lama</small></span><span class="version-tag">RESET DATABASE · CACHE</span></summary>
+          <div class="version-body"><ul>
+            <li>Fungsi databaseOperasionalAudit() ditambahkan untuk memeriksa spreadsheet sasaran, sumber sheet yang dipilih dashboard, jumlah baris, dan status cache.</li>
+            <li>Fungsi databaseOperasionalResetMulaiUlang() ditambahkan untuk membersihkan baris Data_Upload (termasuk alias), PAR Baru, PAR Selesai, LogUnggah, Total Balance Penurunan, dan log pergerakan.</li>
+            <li>Sheet ringkasan Rekening_Bergerak_Angsuran, arsip Rekening_Bergerak_Simpanan_*, sheet staging, dan backup snapshot lama dihapus agar tidak menyisakan data operasional lama.</li>
+            <li>Cache Dashboard, Rekening Bergerak, dan Progres Harian diinvalidasi; cache IndexedDB browser dinaikkan ke namespace baru agar salinan lama tidak digunakan lagi.</li>
+            <li>DataStaf, Akses_2, Wilayah_Kerja, Setting, Analisa, dan properti autentikasi tetap dipertahankan. PAR pertama setelah reset menjadi BASELINE AWAL; pembandingan dimulai pada PAR kedua.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">20.15</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.15</b><small>Mematikan proses cari selisih simpanan; Total Balance tetap dibandingkan</small></span><span class="version-tag">REKENING BERGERAK · TOTAL BALANCE</span></summary>
+          <div class="version-body"><ul>
+            <li>Seluruh proses pencarian selisih Simp. Wajib, Simp. Sukarela, Simp. Hari Raya, dan Simp. Qurban dinonaktifkan: tidak dibaca untuk pembandingan, tidak dihitung delta-nya, tidak masuk audit, dan tidak dibangun ulang.</li>
+            <li>Pembandingan Total Balance tetap aktif untuk seluruh Loan No unik yang ada pada Data_Upload lama dan Excel baru, tanpa filter PAR Baru/Selesai atau kategori rekening. Rumus tetap Data_Upload lama dikurangi Excel baru.</li>
+            <li>Sheet Rekening_Bergerak_Angsuran dan Total Balance Penurunan tetap diperbarui dan divalidasi seperti sebelumnya.</li>
+            <li>Empat sheet Rekening_Bergerak_Simpanan_* yang sudah memiliki data dipertahankan sebagai arsip historis dan tidak dihapus, dibersihkan, atau diperbarui oleh unggahan baru.</li>
+            <li>Pratinjau pemeriksaan dan tabel audit hanya menampilkan hasil Total Balance, sehingga tidak lagi menyatakan bahwa lima nominal sedang dibandingkan.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">20.14</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.14</b><small>Rekening Bergerak memeriksa seluruh Loan No tanpa bergantung pada kategori PAR</small></span><span class="version-tag">REKENING BERGERAK · PEMBANDINGAN SELURUH LOAN NO</span></summary>
+          <div class="version-body"><ul>
+            <li>Perhitungan Total Balance dan empat simpanan dilakukan pada seluruh Loan No unik yang terdapat pada gabungan Data_Upload lama dan Excel baru; tidak menggunakan filter PAR Baru, PAR Selesai, atau status rekening.</li>
+            <li>Loan No yang ada pada kedua snapshot dibandingkan per komponen dengan rumus Data_Upload lama dikurangi Excel baru.</li>
+            <li>Loan No yang hanya ada pada Excel baru dicatat sebagai titik awal dengan seluruh perubahan 0.</li>
+            <li>Loan No yang hanya ada pada Data_Upload lama tetap mendapat catatan tanggal unggah dengan seluruh perubahan 0; tidak dianggap mengalami penurunan sebesar seluruh saldo. Saldo akhir menjadi 0 karena tidak ada pada snapshot terbaru.</li>
+            <li>Setiap sheet tetap satu baris per Loan No unik; urutan konsisten berdasarkan Branch Name lalu Loan No. Jumlah Loan No lama, baru, cocok, baru muncul, dan tidak muncul ditambahkan pada ringkasan hasil pemeriksaan.</li>
+          </ul></div>
+        </details>
+        <details class="version-item" open>
+          <summary><span class="version-marker">20.13</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.13</b><small>Rekap Rekening Bergerak satu baris per Loan No dengan kolom tanggal per unggahan</small></span><span class="version-tag">REKENING BERGERAK · RIWAYAT NILAI</span></summary>
+          <div class="version-body"><ul>
+            <li>Sheet Rekening_Bergerak_Angsuran dan empat sheet Rekening_Bergerak_Simpanan dibangun satu baris per Loan No; unggahan berikutnya memperluas kolom tanggal, bukan menambah baris Loan No.</li>
+            <li>Kolom perubahan angsuran dan masing-masing simpanan menggunakan tanggal pada nama file Excel PAR dengan format dd-mm-yyyy. Kolom subheader baseline tidak dibuat.</li>
+            <li>Urutan identitas diseragamkan: Branch Name, Loan No, Ctr ID, Client ID, Client Name, Product Name, Disbursed Date, Minggon, Kode/Staf, Top Up, lalu saldo awal, kolom perubahan, dan saldo akhir.</li>
+            <li>Nilai perubahan yang tidak ada/nihil tetap ditampilkan sebagai 0. Loan No yang menghilang dari unggahan terbaru tetap berada di riwayat; saldo akhir menjadi 0 jika tidak ada pada snapshot terbaru.</li>
+            <li>Total Balance Akhir dan Total Saldo Akhir diambil dari nilai terakhir Excel yang diunggah.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">20.12</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.12</b><small>Urutan commit aman dan Data_Upload diperbarui paling akhir</small></span><span class="version-tag">UNGGAH PAR · VALIDASI DATA</span></summary>
+          <div class="version-body"><ul>
+            <li>Perbandingan Rekening Bergerak menggunakan snapshot Data_Upload saat ini sebagai satu-satunya sumber saldo pembanding. Log historis tidak lagi menggantikan saldo snapshot yang sedang tersimpan.</li>
+            <li>Urutan proses diubah menjadi staging, compare, record, build summary, validate, lalu update Data_Upload pada tahap terakhir.</li>
+            <li>Lima tabel Rekening Bergerak dibangun menggunakan data Excel baru di staging dan divalidasi sebelum Data_Upload diganti.</li>
+            <li>Data_Upload lama disalin ke backup tersembunyi sebelum update. Jika proses terputus pada tahap akhir, retry melanjutkan dari offset terakhir sementara backup tetap tersedia.</li>
+            <li>Sidik snapshot memeriksa bahwa Data_Upload tidak berubah antara tahap pemeriksaan dan konfirmasi.</li>
+            <li>LogUnggah menggunakan Upload ID untuk mencegah catatan ganda dan menandai proses PREPARED atau SUCCESS.</li>
+            <li>Proses commit yang belum selesai tidak dapat ditimpa oleh upload baru atau dibatalkan di tengah pencatatan.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">20.11</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.11</b><small>Perbaikan tanggal progress dan perhitungan Rekening Bergerak mengikuti riwayat snapshot</small></span><span class="version-tag">UNGGAH PAR · REKENING BERGERAK</span></summary>
+          <div class="version-body"><ul>
+            <li>Tanggal Progress PAR Baru, PAR Selesai, dan Rekening Bergerak menggunakan tanggal pada nama file PAR dd-mm-yyyy, bukan tanggal proses unggah.</li>
+            <li>Perubahan Total Balance dan empat simpanan membandingkan nilai terakhir yang diketahui dengan Excel terbaru. Loan No yang sempat tidak muncul tetap memakai nilai terakhir ketika muncul kembali.</li>
+            <li>Loan No yang pertama kali muncul disimpan sebagai titik awal dengan perubahan nol. Loan No yang tidak ada pada snapshot terbaru ditandai Selesai dan saldo akhir menjadi nol.</li>
+            <li>Baseline untuk Data_Upload lama disiapkan otomatis pada perbandingan berikutnya jika Loan No belum memiliki riwayat di log.</li>
+            <li>Nilai perubahan positif berarti saldo turun; nilai negatif berarti saldo naik, mengikuti rumus Data_Upload dikurangi Excel terbaru.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">20.10</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.10</b><small>Perbaikan angka kartu utama Progres Harian</small></span><span class="version-tag">PROGRES HARIAN</span></summary>
+          <div class="version-body"><ul>
+            <li>Memperbaiki agregasi total PAR Baru, PAR Selesai, dan Selisih. Kartu utama kini menjumlahkan hasil arsip sesuai filter Bulan, Tanggal Progress, Cabang, dan Wilayah Kerja.</li>
+            <li>Angka kartu utama diselaraskan dengan akumulasi rekap cabang serta data grafik harian.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">20.09</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.09</b><small>Baseline awal untuk pembanding seluruh unggahan PAR berikutnya</small></span><span class="version-tag">UNGGAH EXCEL</span></summary>
+          <div class="version-body"><ul>
+            <li>Jika Data_Upload hanya berisi header atau tidak memiliki nilai data pada baris data, Excel PAR pertama disimpan sebagai BASELINE AWAL, bukan PAR Baru.</li>
+            <li>Unggahan baseline tidak menambahkan baris ke PAR Baru, PAR Selesai, log Rekening Bergerak, maupun Total Balance Penurunan.</li>
+            <li>Mulai unggahan PAR kedua, Loan No dibandingkan dengan baseline/Data_Upload terakhir. PAR Baru, PAR Selesai, perubahan Total Balance, dan perubahan empat jenis simpanan diproses seperti biasa.</li>
+            <li>Pratinjau dan konfirmasi upload menampilkan keterangan khusus agar Administrator mengetahui bahwa file sedang disimpan sebagai data awal.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">20.08</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.08</b><small>Pelacakan perubahan saldo angsuran dan simpanan antar unggahan PAR</small></span><span class="version-tag">PROGRES HARIAN</span></summary>
+          <div class="version-body"><ul>
+            <li>Filter Bulan ditambahkan. Filter Tanggal Progress mengikuti bulan yang dipilih; default keduanya Semua. Pilihan tanggal menggabungkan arsip PAR Baru/PAR Selesai dan tanggal pembandingan Rekening Bergerak, termasuk unggahan tanpa PAR Baru/Selesai.</li>
+            <li>Loan No yang tetap muncul pada Data_Upload dibandingkan antara data lama dan Excel terbaru untuk Total Balance, Simp. Wajib, Simp. Sukarela, Simp. Hari Raya, dan Simp. Qurban.</li>
+            <li>Riwayat perubahan dicatat secara kumulatif pada Rekening_Bergerak_Angsuran dan empat sheet Rekening_Bergerak_Simpanan_*. Sheet Total Balance Penurunan mencatat peristiwa penurunan Total Balance yang positif.</li>
+            <li>Dashboard dan buletin Ringkasan menampilkan Penurunan Outstanding PAR by Angsuran dengan filter kumulatif semua periode, bulan, atau tanggal. Nilai dihitung bersih: saldo lama dikurangi saldo baru; nilai negatif menunjukkan kenaikan saldo.</li>
+            <li>PAR Baru dan PAR Selesai tetap memakai mekanisme sebelumnya. Riwayat pergerakan mulai terkumpul sejak unggahan pertama setelah v20.08 dipasang.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">20.07</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.07</b><small>Penyempurnaan tipografi dan tata letak buletin Kabar Regional J</small></span><span class="version-tag">RINGKASAN</span></summary>
+          <div class="version-body"><ul>
+            <li>Hierarki tipografi diseragamkan agar judul, subjudul, angka utama, label, narasi, dan catatan kaki memiliki ukuran yang konsisten.</li>
+            <li>Label dan narasi panjang kini membungkus ke baris berikutnya; nilai utama menyesuaikan ukuran secara terbatas agar tetap berada di dalam kartu.</li>
+            <li>Jarak vertikal dan tinggi panel disesuaikan untuk mengurangi teks yang terlalu rapat atau bertumpuk. Resolusi buletin menjadi 1440 × 2620 piksel.</li>
+            <li>Empat sumber data, cakupan Wilayah Kerja, dan hak akses Enable Download tetap mengikuti mekanisme v20.06.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">20.06</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.06</b><small>Buletin gambar "Apa kabar Regional J?" pada Ringkasan</small></span><span class="version-tag">RINGKASAN</span></summary>
+          <div class="version-body"><ul>
+            <li>Tombol Unduh Gambar Kabar ditambahkan pada halaman Ringkasan dengan format vertikal 1440 × 2500 piksel, tipografi diperbesar, dan tata letak kartu untuk dibaca di ponsel maupun dibagikan ke grup.</li>
+            <li>Buletin merangkum Rekening Bergerak, Analisa Cabang, Progres Harian, dan Tool PAR menggunakan kalimat sederhana serta indikator utama.</li>
+            <li>Data mengikuti cakupan Wilayah Kerja akun yang login; Progres Harian diminta tanpa filter tampilan, tetapi tetap dibatasi oleh server. Cakupan masing-masing modul dicantumkan pada gambar.</li>
+            <li>Unduh gambar mengikuti pengaturan Setting &gt; Enable Download. Administrator selalu memiliki akses; tingkat lain mengikuti izin yang diaktifkan.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">20.05</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.05</b><small>Pengaturan hak akses Download Gambar F4 berdasarkan tingkat akun</small></span><span class="version-tag">AKSES</span></summary>
           <div class="version-body"><ul>
             <li>Tombol Gambar F4 pada Rekening Bergerak, Tool PAR, Progres Harian, dan Analisa Cabang secara default hanya tersedia bagi ADMINISTRATOR.</li>
             <li>Submenu Setting &gt; Enable Download memungkinkan Administrator mengaktifkan akses secara terpisah untuk USER 0, USER 1, USER 2, dan USER 3.</li>

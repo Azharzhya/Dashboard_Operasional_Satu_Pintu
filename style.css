@@ -215,6 +215,9 @@ th.num .th{flex-direction:row-reverse}
 .st{font-size:13px;font-weight:600;padding:4px 12px;border-radius:99px;background:var(--em-l);color:var(--em-d)}
 .st.warn{background:var(--yel-l);color:var(--yel-d)}
 #uptbl th,#uptbl td{padding:8px 12px}
+#updiff-audit th,#updiff-audit td{padding:8px 12px}
+#updiff-audit-wrap{margin-bottom:12px}
+.updiff-note{display:block;margin-top:7px;color:var(--mute);font-size:11px;line-height:1.55}
 .bar{height:10px;background:var(--em-l);border-radius:99px;overflow:hidden;margin:16px 0 0}
 .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--em),var(--yel));transition:width .25s}
 #upinfo .tw{margin-bottom:0}
@@ -612,7 +615,12 @@ th.num .th{flex-direction:row-reverse}
 .rb-notice.warn:not([hidden])::before{content:"!";display:grid;place-items:center;flex:none;width:19px;height:19px;border-radius:50%;background:var(--yel);color:var(--yel-d);font-weight:900}
 
 /* Ringkasan, Setting, Unggah Excel */
-.summary-heading{margin-bottom:16px}
+.summary-heading{margin-bottom:10px;align-items:center}
+.summary-news-action{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex:0 0 auto}
+.summary-news-action .btn{white-space:nowrap}
+.summary-news-caption{font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--em-d)}
+.summary-news-note{margin:0 0 10px;min-height:0}
+@media(max-width:650px){.summary-heading{align-items:flex-start}.summary-news-action{align-items:flex-start;width:100%}.summary-news-action .btn{width:100%;justify-content:center}.summary-news-caption{padding-left:2px}}
 #p-sum .dtools{border-radius:12px 12px 0 0}
 #p-sum .tw{border-radius:0 0 12px 12px}
 .setbox{max-width:760px;padding:23px;border-radius:15px;box-shadow:var(--shadow-card)}
@@ -1021,3 +1029,15 @@ th.num .th{flex-direction:row-reverse}
   .dhead>.dact .btn{flex:1 1 0;width:auto;min-width:0;max-width:none;padding:0 8px;font-size:11px}
   .dhead>:first-child{flex:1 1 100%}
 }
+
+/* v20.08: filter bulan dan KPI kumulatif penurunan saldo angsuran */
+.ph-filter-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+.ph-movement-kpi{display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,.42fr);align-items:center;gap:18px;margin:0 0 16px;padding:18px 20px;border:1px solid #cce7d8;border-radius:16px;background:linear-gradient(115deg,#f3fbf6 0%,#fff 68%,#edf8f1 100%);box-shadow:var(--shadow-card)}
+.ph-movement-kpi-main h2{margin:4px 0 5px;font-size:17px;font-weight:850;color:#075b43}
+.ph-movement-kpi-main p{max-width:720px;font-size:11px;line-height:1.55;color:var(--mute)}
+.ph-movement-kpi-value{display:grid;justify-items:end;gap:4px;text-align:right}
+.ph-movement-kpi-value strong{font-size:clamp(22px,3vw,34px);line-height:1.15;font-weight:900;color:#087443;font-variant-numeric:tabular-nums}
+.ph-movement-kpi-value span{font-size:10px;font-weight:800;color:#216548}
+.ph-movement-kpi-value small{font-size:9px;color:var(--mute)}
+@media(max-width:900px){.ph-movement-kpi{grid-template-columns:1fr;gap:10px}.ph-movement-kpi-value{justify-items:start;text-align:left}.ph-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.ph-movement-kpi{padding:13px;border-radius:13px}.ph-movement-kpi-main h2{font-size:14px}.ph-movement-kpi-main p{font-size:9px}.ph-movement-kpi-value strong{font-size:24px}.ph-movement-kpi-value span,.ph-movement-kpi-value small{font-size:8px}}
