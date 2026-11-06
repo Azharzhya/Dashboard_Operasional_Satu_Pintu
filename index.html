@@ -256,13 +256,13 @@
         <div class="page-heading summary-heading">
           <div><div class="eyebrow"><span class="eyebrow-dot"></span> IKHTISAR PORTOFOLIO</div>
             <h1 class="ph">Ringkasan</h1>
-            <p class="lead">Ikhtisar pinjaman per cabang/staf dan buletin kabar operasional Regional J.</p>
+            <p class="lead">Ikhtisar pinjaman per cabang/staf dan Kabar Berita Regional J.</p>
           </div>
           <div class="summary-news-action">
             <button class="btn primary image-download-btn" id="sum-news-img" type="button" disabled hidden>
-              <span class="btn-icon" aria-hidden="true">▧</span><span class="btn-label">Unduh Gambar Kabar</span>
+              <span class="btn-icon" aria-hidden="true">▧</span><span class="btn-label">Unduh Kabar Berita</span>
             </button>
-            <span class="summary-news-caption">Apa kabar Regional J?</span>
+            <span class="summary-news-caption">Kabar Berita</span>
           </div>
         </div>
         <p id="sum-news-msg" class="note summary-news-note" role="status" aria-live="polite"></p>
@@ -539,6 +539,11 @@
         <span>atau seret file ke sini file .xls or .xlsx</span>
       </label>
       <input id="file" type="file" accept=".xlsx,.xls" hidden>
+      <section class="refresh-box" aria-label="Segarkan data dashboard">
+        <button class="btn ghost fit" id="refresh-all" type="button"><span class="btn-icon" aria-hidden="true">↻</span><span class="btn-label">Segarkan data dashboard</span></button>
+        <p id="refresh-msg" class="note" role="status"></p>
+        <small class="updiff-note">Gunakan setelah Data_Upload, PAR Baru/PAR Selesai, atau Setting diubah langsung di Google Sheets (bukan lewat unggah web). Semua halaman Dashboard dihitung ulang dan memakai data yang sama.</small>
+      </section>
       <div id="upinfo" hidden>
         <div class="stats" id="upstats"></div>
         <div class="tw"><table id="uptbl"></table></div>

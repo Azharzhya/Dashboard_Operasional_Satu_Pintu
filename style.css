@@ -1041,3 +1041,5 @@ th.num .th{flex-direction:row-reverse}
 .ph-movement-kpi-value small{font-size:9px;color:var(--mute)}
 @media(max-width:900px){.ph-movement-kpi{grid-template-columns:1fr;gap:10px}.ph-movement-kpi-value{justify-items:start;text-align:left}.ph-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.ph-movement-kpi{padding:13px;border-radius:13px}.ph-movement-kpi-main h2{font-size:14px}.ph-movement-kpi-main p{font-size:9px}.ph-movement-kpi-value strong{font-size:24px}.ph-movement-kpi-value span,.ph-movement-kpi-value small{font-size:8px}}
+.refresh-box{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin:14px 0}
+.refresh-box .note{margin:0}
