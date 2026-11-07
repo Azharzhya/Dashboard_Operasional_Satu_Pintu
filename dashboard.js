@@ -277,7 +277,7 @@ const state = {
   cat: 'a', q: '', branch: '', staf: '', sort: { label: '', dir: 1 }, page: 0, size: 50, view: [],
   sumBy: 'branch', sumSort: { key: 'n', dir: -1 }, sumQ: '', wjDirty: false,
   wilayah: null, wilayahSelected: '', wilayahDraft: [], wilayahDrafts: Object.create(null), wilayahLoading: false, wilayahLoadedAt: 0,
-  rekening: null, rekeningLoading: false, rekeningLoadedAt: 0, dashboardPage: 'move',
+  rekening: null, rekeningLoading: false, rekeningLoadedAt: 0, dashboardPage: 'sum',
   progress: null, progressLoading: false, progressLoadedAt: 0, progressReloadPending: false,
   progressFilters: { branch: '', monthKey: '', progressDate: '', coordinatorNik: '' }, progressFilterRevision: 0,
   progressRecap: 'new', progressDetailPage: 1, progressDetailSeq: 0, progressDetailResult: null,
@@ -341,8 +341,8 @@ function selectDashboardPage(which) {
       && (!state.data || Date.now() - state.lastCheck > AUTO_SYNC_MS)) loadDash();
   if (which === 'sum') {
     drawSummary();
-    if (state.user && canDownloadImage()) prepareRegionalNewsData();
-    else if (state.user && !state.data && !state.loading) loadDash();
+    paintKabarBerita();
+    if (state.user) prepareRegionalNewsData();
   }
   if (which === 'progress' && state.user && !state.progressLoading
       && (!state.progress || Date.now() - state.progressLoadedAt > AUTO_SYNC_MS)) loadProgresHarian();
@@ -389,7 +389,7 @@ function paintImageDownloadControls() {
   const nav = $('setnav-enable-download');
   if (nav) nav.hidden = !admin;
   if (!admin && state.settingPage === 'enable-download') setSettingPage('global');
-  if (allowed && state.dashboardPage === 'sum' && state.user && !state.newsLoading) {
+  if (state.dashboardPage === 'sum' && state.user && !state.newsLoading && !state.newsReady) {
     Promise.resolve().then(() => prepareRegionalNewsData());
   }
 }
@@ -603,7 +603,7 @@ function enterApp(user) {
   state.analisaCabang = null; state.analisaLoadedAt = 0; state.analisaLoading = false;
   state.analisaFilters = { branch: '*', period: '', compare: '' };
   invalidateRegionalNewsData();
-  state.dashboardPage = 'move';
+  state.dashboardPage = 'sum';
   state.rbSearch = { branch: '', coordinator: '' };
   state.rbSort = { branch: { key: 'name', dir: 1 }, coordinator: { key: 'name', dir: 1 } };
   $('rb-branch-q').value = ''; $('rb-coordinator-q').value = '';
@@ -751,7 +751,7 @@ function applyData(d) {
   renderKpis(); renderCards(); fillBranchOptions(); fillSortOptions();
   $('dbody').hidden = !d.scanned;
   if (d.scanned) showCat(state.cat, true);
-  if (!$('p-sum').hidden) drawSummary();
+  if (!$('p-sum').hidden) { drawSummary(); paintKabarBerita(); }
 }
 
 function renderKpis() {
@@ -1413,7 +1413,7 @@ async function commitUpload() {
   loadDash();
   // Pemanasan cache Rekening Bergerak dan Progres Harian di latar belakang agar halaman terbuka cepat bagi semua pengguna.
   api('webRefreshData', { token: (session.get() || {}).token, mode: 'warm' }, { timeoutMs: 300000 });
-  if (state.dashboardPage === 'sum' && canDownloadImage()) prepareRegionalNewsData();
+  if (state.dashboardPage === 'sum') prepareRegionalNewsData();
 }
 
 // Administrator: naikkan versi data, hitung ulang semua halaman Dashboard, lalu muat ulang bersamaan.
@@ -1433,7 +1433,7 @@ async function refreshAllData() {
   setNote('refresh-msg', 'Selesai dalam ' + clock(performance.now() - t0) + '. Semua halaman Dashboard kini memakai data yang sama dan dimuat ulang saat dibuka.', 'good');
   toast('Data dashboard disegarkan.');
   loadDash();
-  if (state.dashboardPage === 'sum' && canDownloadImage()) prepareRegionalNewsData();
+  if (state.dashboardPage === 'sum') prepareRegionalNewsData();
 }
 
 async function saveAnalisaUpload() {
@@ -1452,7 +1452,7 @@ async function saveAnalisaUpload() {
   state.analisaCabang = null; state.analisaLoadedAt = 0;
   invalidateRegionalNewsData();
   if (!$('p-dashboard').hidden && state.dashboardPage === 'analisa') loadAnalisaCabang();
-  else if (!$('p-dashboard').hidden && state.dashboardPage === 'sum' && canDownloadImage()) prepareRegionalNewsData();
+  else if (!$('p-dashboard').hidden && state.dashboardPage === 'sum') prepareRegionalNewsData();
 }
 
 async function sendUpload() {
@@ -2520,14 +2520,15 @@ function invalidateRegionalNewsData() {
 }
 
 async function prepareRegionalNewsData() {
-  if (!state.user || !canDownloadImage()) return;
+  if (!state.user) return;
   if (state.newsPromise) return state.newsPromise;
   const seq = ++state.newsLoadSeq;
   const userNik = state.user.nik;
   state.newsLoading = true; state.newsReady = false;
   const button = $('sum-news-img');
   if (button) button.disabled = true;
-  setNote('sum-news-msg', 'Mengumpulkan data Rekening Bergerak, Analisa Cabang, Progres Harian, dan Tool PAR…');
+  setNote('sum-news-msg', canDownloadImage() ? 'Mengumpulkan data Rekening Bergerak, Analisa Cabang, Progres Harian, dan Tool PAR…' : '');
+  paintKabarBerita();
 
   const jobs = [
     ['Rekening Bergerak', () => regionalNewsEnsureModule('Rekening Bergerak', () => !!state.rekening,
@@ -2540,7 +2541,7 @@ async function prepareRegionalNewsData() {
   ];
   state.newsPromise = (async () => {
     const results = await Promise.all(jobs.map(async ([label, run]) => {
-      try { await run(); return { label, ok: true }; }
+      try { await run(); if (seq === state.newsLoadSeq) paintKabarBerita(); return { label, ok: true }; }
       catch (error) { return { label, ok: false, error: error && error.message ? error.message : String(error) }; }
     }));
     if (seq !== state.newsLoadSeq || !state.user || state.user.nik !== userNik) return;
@@ -2550,7 +2551,7 @@ async function prepareRegionalNewsData() {
     if (button) button.disabled = !complete;
     if (complete) {
       const stamp = new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
-      setNote('sum-news-msg', 'Kabar Berita siap diunduh. Empat sumber data berhasil disiapkan · diperiksa ' + stamp + '.', 'good');
+      setNote('sum-news-msg', canDownloadImage() ? 'Kabar Berita siap diunduh. Empat sumber data berhasil disiapkan · diperiksa ' + stamp + '.' : '', 'good');
     } else {
       const details = failed.map(x => x.label + ': ' + x.error);
       if (!failed.length) details.push('Masih ada sumber data yang belum tersedia.');
@@ -2561,6 +2562,7 @@ async function prepareRegionalNewsData() {
       state.newsLoading = false;
       state.newsPromise = null;
       if (button) button.disabled = !state.newsReady;
+      paintKabarBerita();
     }
   });
   return state.newsPromise;
@@ -2743,16 +2745,9 @@ function regionalNewsBarChart(ctx, x, y, w, h, title, labels, up, down, money) {
   ctx.textAlign = 'left';
 }
 
-function imgBuildRegionalNews() {
-  if (!canDownloadImage()) throw new Error('Fitur Download Gambar belum diaktifkan untuk tingkat akun ini.');
-  if (!regionalNewsAllReady()) throw new Error('Empat sumber data belum lengkap. Tunggu proses pemuatan selesai, lalu coba kembali.');
-  const W = REGIONAL_NEWS_W, M = REGIONAL_NEWS_M, CW = W - M * 2, GAP = 18, SECTION_GAP = 22;
-  const canvas = document.createElement('canvas');
-  canvas.width = W; canvas.height = REGIONAL_NEWS_MAX_H;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Browser tidak dapat menyiapkan gambar Kabar Berita.');
-  ctx.fillStyle = '#EEF4F0'; ctx.fillRect(0, 0, W, REGIONAL_NEWS_MAX_H);
-
+// Semua angka Kabar Berita dihitung di satu tempat agar gambar unduhan dan tampilan layar Ringkasan selalu sama.
+// Aman dipanggil saat sebagian sumber data belum selesai dimuat (bagian itu dibiarkan kosong/nol).
+function regionalNewsModel() {
   // ---- Data
   const rb = state.rekening || {}, rbRows = Array.isArray(rb.branchRows) ? rb.branchRows : [];
   const rbTotal = rbRows.reduce((s, r) => s + (Number(r.total) || 0), 0), rbActive = rbRows.reduce((s, r) => s + (Number(r.active) || 0), 0);
@@ -2777,14 +2772,6 @@ function imgBuildRegionalNews() {
   const khusus = (Array.isArray(ph.topUp) ? ph.topUp : []).find(x => x.category === 'KHUSUS') || { newCount: 0, newBalance: 0 };
   const khCount = Number(khusus.newCount) || 0, khBalance = Number(khusus.newBalance) || 0;
 
-  // ---- Masthead
-  ctx.fillStyle = '#064E3B'; ctx.fillRect(0, 0, W, 300);
-  ctx.fillStyle = '#E2B83E'; ctx.fillRect(M, 50, 14, 48);
-  regionalNewsSingleLine(ctx, 'REGIONAL J  ·  KABAR OPERASIONAL', M + 34, 84, CW - 34, 22, 22, '700', '#BFE6D4');
-  regionalNewsSingleLine(ctx, 'Kabar Berita', M, 184, CW, 88, 70, '700', '#FFFFFF');
-  regionalNewsSingleLine(ctx, 'Lima poin yang perlu kita ketahui bersama.', M, 237, CW, 34, 30, '400', '#E2F1E8');
-  regionalNewsSingleLine(ctx, new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }), M, 278, CW, 25, 22, '600', '#D6E9DF');
-
   // ---- Sorotan (ringkasan satu kalimat per poin)
   const lead = [];
   if (anReady && an.compare) {
@@ -2793,9 +2780,37 @@ function imgBuildRegionalNews() {
   }
   if (rbReady) lead.push('Rekening bergerak ' + nf1.format(rbPct) + '% (' + fmt(rbActive) + ' dari ' + fmt(rbTotal) + ' rekening PAR).');
   const net = newBalance - doneBalance;
-  lead.push(net > 0 ? 'PAR Baru ' + rpShort(newBalance) + ' lebih tinggi ' + rpShort(net) + ' dari PAR Selesai ' + rpShort(doneBalance) + '.'
+  if (state.newsProgress) lead.push(net > 0 ? 'PAR Baru ' + rpShort(newBalance) + ' lebih tinggi ' + rpShort(net) + ' dari PAR Selesai ' + rpShort(doneBalance) + '.'
     : net < 0 ? 'PAR Selesai ' + rpShort(doneBalance) + ' lebih tinggi ' + rpShort(Math.abs(net)) + ' dari PAR Baru ' + rpShort(newBalance) + '.'
       : 'PAR Baru dan PAR Selesai seimbang pada ' + rpShort(newBalance) + '.');
+  return {
+    rb, rbRows, rbTotal, rbActive, rbPct, rbReady, an, anReady, anDelta, metricOf, anValue, anLabel, sum, catRows, rowsA, rows1, rowsS, angKali, angNominal, d, ph, pt, red, newBalance, doneBalance, newCount, doneCount, daily, lastDate, recent, dd, khusus, khCount, khBalance, lead,
+    loaded: { rekening: !!state.rekening, analisa: !!state.analisaCabang, tool: !!state.data, progress: !!state.newsProgress }
+  };
+}
+
+function imgBuildRegionalNews() {
+  if (!canDownloadImage()) throw new Error('Fitur Download Gambar belum diaktifkan untuk tingkat akun ini.');
+  if (!regionalNewsAllReady()) throw new Error('Empat sumber data belum lengkap. Tunggu proses pemuatan selesai, lalu coba kembali.');
+  const W = REGIONAL_NEWS_W, M = REGIONAL_NEWS_M, CW = W - M * 2, GAP = 18, SECTION_GAP = 22;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = REGIONAL_NEWS_MAX_H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Browser tidak dapat menyiapkan gambar Kabar Berita.');
+  ctx.fillStyle = '#EEF4F0'; ctx.fillRect(0, 0, W, REGIONAL_NEWS_MAX_H);
+
+  const {
+    rb, rbRows, rbTotal, rbActive, rbPct, rbReady, an, anReady, anDelta, metricOf, anValue, anLabel, sum, catRows, rowsA, rows1, rowsS, angKali, angNominal, d, ph, pt, red, newBalance, doneBalance, newCount, doneCount, daily, lastDate, recent, dd, khusus, khCount, khBalance, lead
+  } = regionalNewsModel();
+
+  // ---- Masthead
+  ctx.fillStyle = '#064E3B'; ctx.fillRect(0, 0, W, 300);
+  ctx.fillStyle = '#E2B83E'; ctx.fillRect(M, 50, 14, 48);
+  regionalNewsSingleLine(ctx, 'REGIONAL J  ·  KABAR OPERASIONAL', M + 34, 84, CW - 34, 22, 22, '700', '#BFE6D4');
+  regionalNewsSingleLine(ctx, 'Kabar Berita', M, 184, CW, 88, 70, '700', '#FFFFFF');
+  regionalNewsSingleLine(ctx, 'Lima poin yang perlu kita ketahui bersama.', M, 237, CW, 34, 30, '400', '#E2F1E8');
+  regionalNewsSingleLine(ctx, new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }), M, 278, CW, 25, 22, '600', '#D6E9DF');
+
   let y = 320;
   const leadH = 92 + lead.length * 50;
   imgRoundRect(ctx, M, y, CW, leadH, 24, '#FFFFFF', '#DDE8E1');
@@ -2897,6 +2912,179 @@ function imgBuildRegionalNews() {
   if (!octx) throw new Error('Browser tidak dapat menyiapkan gambar Kabar Berita.');
   octx.drawImage(canvas, 0, 0, W, total, 0, 0, W, total);
   return out;
+}
+
+/* ---------------------------------------------------------------------
+   Kabar Berita di layar (halaman Ringkasan). Memakai regionalNewsModel() yang sama dengan gambar unduhan,
+   jadi angkanya selalu identik. Tiap bagian terisi begitu sumber datanya tiba; yang belum siap tampil sebagai kerangka.
+   --------------------------------------------------------------------- */
+const SVG_NS = 'http://www.w3.org/2000/svg';
+function svgEl(tag, attrs, ...kids) {
+  const e = document.createElementNS(SVG_NS, tag);
+  for (const k in attrs || {}) if (attrs[k] != null) e.setAttribute(k, attrs[k]);
+  for (const c of kids.flat()) if (c != null && c !== false) e.append(c);
+  return e;
+}
+function kbDeltaView(info, money) {
+  if (!info.has) return h('div', { class: 'kb-delta neutral' }, h('span', { class: 'kb-diff', text: 'Belum ada periode pembanding' }));
+  const tone = info.good === null ? 'neutral' : info.good ? 'good' : 'bad';
+  const shape = info.dir > 0 ? 'up' : info.dir < 0 ? 'down' : 'flat';
+  const pct = info.pct == null ? 'N/A (dasar 0)' : (info.pct > 0 ? '+' : info.pct < 0 ? '−' : '') + nf1.format(Math.abs(info.pct)) + '%';
+  return h('div', { class: 'kb-delta ' + tone + ' ' + shape },
+    h('span', { class: 'kb-tri', 'aria-hidden': 'true' }),
+    h('span', { class: 'kb-pct', text: pct }),
+    h('span', { class: 'kb-diff', text: 'Perubahan ' + regionalNewsSigned(money, info.delta) }));
+}
+function kbChangeCard(label, valueText, info, money, fullValue) {
+  return h('article', { class: 'kb-card' },
+    h('span', { class: 'kb-label', text: label }),
+    h('strong', { class: 'kb-value', text: valueText, title: fullValue || null }),
+    kbDeltaView(info, money));
+}
+function kbMetricCard(label, valueText, note, tone) {
+  return h('article', { class: 'kb-card' + (tone ? ' tone-' + tone : '') },
+    h('span', { class: 'kb-label', text: label }),
+    h('strong', { class: 'kb-value', text: valueText }),
+    note ? h('span', { class: 'kb-note', text: note }) : null);
+}
+function kbCategoryCard(title, count, label, value, detail, accent) {
+  return h('article', { class: 'kb-card kb-cat', style: '--kb-cat:' + accent },
+    h('span', { class: 'kb-label', text: title }),
+    h('div', { class: 'kb-count' }, h('b', { text: fmt(count) }), h('span', { text: 'Loan No' })),
+    h('div', { class: 'kb-cat-sum' }, h('span', { class: 'kb-label', text: label }), h('strong', { class: 'kb-money', text: value })),
+    detail ? h('span', { class: 'kb-note', text: detail }) : null);
+}
+// Grafik batang berpasangan (SVG): Peningkatan (PAR Baru) vs Penyelesaian (PAR Selesai) per tanggal progress.
+function kbBarChart(title, labels, up, down, money) {
+  const W = 480, H = 270, pl = 58, pr = 10, pt = 14, pb = 38, n = labels.length;
+  const legend = h('div', { class: 'kb-legend' },
+    h('span', null, h('i', { class: 'up' }), 'Peningkatan (PAR Baru)'),
+    h('span', null, h('i', { class: 'down' }), 'Penyelesaian (PAR Selesai)'));
+  let graphic;
+  if (!n) graphic = h('p', { class: 'kb-empty', text: 'Belum ada data harian.' });
+  else {
+    const max = Math.max(1, ...up, ...down), step = regionalNewsNiceStep(max), top = step * Math.ceil(max / step - 1e-9);
+    const pw = W - pl - pr, ph = H - pt - pb, gw = pw / n, bw = Math.min(16, gw * 0.36), kids = [];
+    for (let v = 0; v <= top + step / 1000; v += step) {
+      const y = pt + ph - ph * v / top;
+      kids.push(svgEl('line', { x1: pl, x2: W - pr, y1: y, y2: y, class: v === 0 ? 'kb-axis' : 'kb-gridline' }),
+        svgEl('text', { x: pl - 7, y: y + 4, class: 'kb-tick', 'text-anchor': 'end' }, regionalNewsAxis(v, money)));
+    }
+    labels.forEach((lab, i) => {
+      const cx = pl + gw * i + gw / 2;
+      [[up[i], -bw - 1, 'kb-bar-up', 'Peningkatan'], [down[i], 1, 'kb-bar-down', 'Penyelesaian']].forEach(([v, dx, cls, name]) => {
+        const bh = v > 0 ? Math.max(2, ph * v / top) : 0;
+        kids.push(svgEl('rect', { x: cx + dx, y: pt + ph - bh, width: bw, height: bh, rx: 2, class: cls },
+          svgEl('title', null, lab + ' · ' + name + ': ' + (money ? rpShort(v) : fmt(v)))));
+      });
+      if (n <= 10 || (n - 1 - i) % 2 === 0) kids.push(svgEl('text', { x: cx, y: H - pb + 18, class: 'kb-tick', 'text-anchor': 'middle' }, lab));
+    });
+    graphic = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'kb-svg', role: 'img', 'aria-label': title }, kids);
+  }
+  return h('figure', { class: 'kb-chart' }, h('figcaption', { text: title }), legend, graphic);
+}
+function kbSection(num, title, subtitle, accent, body, links) {
+  return h('section', { class: 'kb-sec', style: '--kb-accent:' + accent },
+    h('div', { class: 'kb-sec-head' },
+      h('span', { class: 'kb-num', text: String(num).padStart(2, '0') }),
+      h('div', { class: 'kb-sec-title' }, h('h3', { text: title }), h('p', { text: subtitle })),
+      links && links.length ? h('div', { class: 'kb-links' }, links.map(([text, page]) =>
+        h('button', { type: 'button', class: 'kb-more', onclick: () => selectDashboardPage(page), text: text + ' →' }))) : null),
+    body);
+}
+const kbSkeleton = (n, two) => h('div', { class: 'kb-grid' + (two ? ' two' : ''), 'aria-hidden': 'true' },
+  Array.from({ length: n }, () => h('div', { class: 'kb-card skel kb-skel' })));
+const kbMessage = text => h('p', { class: 'kb-empty', text });
+
+function paintKabarBerita() {
+  const root = $('kb');
+  if (!root) return;
+  if (!state.user) { root.replaceChildren(); return; }
+  const m = regionalNewsModel(), L = m.loaded;
+  const allLoaded = L.rekening && L.analisa && L.tool && L.progress;
+  const stamp = (state.rekening && state.rekening.dataUpdated) || (state.data && state.data.updated) || '';
+  const mainScope = state.user.tingkat === 'ADMINISTRATOR' ? 'Semua cabang' : 'Sesuai Wilayah Kerja akun';
+
+  const masthead = h('header', { class: 'kb-mast' },
+    h('div', { class: 'kb-mast-text' },
+      h('span', { class: 'kb-eyebrow', text: 'REGIONAL J  ·  KABAR OPERASIONAL' }),
+      h('h2', { class: 'kb-title', text: 'Kabar Berita' }),
+      h('p', { class: 'kb-tagline', text: 'Lima poin yang perlu kita ketahui bersama.' })),
+    h('div', { class: 'kb-mast-meta' },
+      h('span', { class: 'kb-date', text: new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) }),
+      stamp ? h('span', { class: 'kb-chip', text: 'Data per ' + fmtStamp(stamp) }) : null,
+      state.newsLoading && !allLoaded ? h('span', { class: 'kb-chip' }, h('span', { class: 'spin' }), 'Memuat data…') : null));
+
+  const lead = m.lead.length
+    ? h('section', { class: 'kb-lead', 'aria-label': 'Sorotan' },
+      h('h3', { text: 'SOROTAN' }), h('ul', null, m.lead.map(t => h('li', { text: t }))))
+    : null;
+
+  // 1. Perkembangan Cabang
+  const s1 = !L.analisa ? kbSkeleton(6)
+    : !m.anReady ? kbMessage('Data Analisa Cabang belum tersedia. Unggah file Analisa melalui menu Unggah Excel agar perkembangan cabang dapat ditampilkan.')
+      : h('div', { class: 'kb-grid' }, ['member', 'outstanding', 'disbursement', 'saving', 'repayment', 'margin'].map(key => {
+        const mt = m.metricOf(key), money = mt.kind === 'money';
+        return kbChangeCard(mt.label, m.anValue(key), m.anDelta(key, true), money, money ? rp(m.an.current[key] || 0) : null);
+      }));
+
+  // 2. Kondisi Permasalahan Cabang
+  const rbBlock = !L.rekening ? kbSkeleton(3)
+    : !m.rbReady ? kbMessage('Rekening Bergerak belum dihitung: Tanggal N belum ditetapkan oleh Administrator atau User 0.')
+      : h('div', null,
+        h('div', { class: 'kb-grid' },
+          kbMetricCard('Total PAR', fmt(m.rbTotal), 'Rekening dalam cakupan akses'),
+          kbMetricCard('Rekening Bergerak', fmt(m.rbActive), 'Bertransaksi sejak Tanggal N', 'good'),
+          kbMetricCard('Persentase Bergerak', nf1.format(m.rbPct) + '%', 'Dibanding total PAR', 'good')),
+        h('div', { class: 'kb-meter', role: 'img', 'aria-label': 'Persentase rekening bergerak ' + nf1.format(m.rbPct) + ' persen' },
+          h('i', { style: 'width:' + Math.min(100, Math.max(0, m.rbPct)).toFixed(1) + '%' })));
+  const anBlock = !L.analisa ? kbSkeleton(2, true)
+    : !m.anReady ? kbMessage('Data Analisa Cabang belum tersedia.')
+      : h('div', { class: 'kb-grid two' },
+        kbChangeCard('Member PAR', m.anValue('memberPAR'), m.anDelta('memberPAR', false), false),
+        kbChangeCard('Outstanding PAR', m.anValue('outstandingPAR'), m.anDelta('outstandingPAR', false), true, rp(m.an.current.outstandingPAR || 0)));
+  const s2 = h('div', { class: 'kb-stack' },
+    h('h4', { class: 'kb-subhead', text: 'Rekening Bergerak' + (m.rbReady ? '  ·  Tanggal N: ' + rbDateLabel(m.rb.settingDate) : '') }), rbBlock,
+    h('h4', { class: 'kb-subhead', text: 'Analisa Cabang · PAR' + (m.anReady ? '  ·  ' + m.anLabel : '') }), anBlock);
+
+  // 3. Rekomendasi Penyelesaian
+  const s3 = !L.tool ? kbSkeleton(3)
+    : h('div', null,
+      h('div', { class: 'kb-grid' },
+        kbCategoryCard('Angsuran By Sukarela', m.rowsA.length, 'Nominal angsuran', rpShort(m.angNominal), fmt(m.angKali) + ' kali angsuran', '#0a7a5a'),
+        kbCategoryCard('Pelunasan di Bawah 100.000', m.rows1.length, 'Total Balance', rpShort(m.sum(m.rows1, r => r[F.BALANCE])), 'Sisa pelunasan sampai Rp 100.000', '#d0a12b'),
+        kbCategoryCard('Pelunasan dari Simpanan', m.rowsS.length, 'Total Balance', rpShort(m.sum(m.rowsS, r => r[F.BALANCE])), 'Simpanan sudah menutup Total Balance', '#0a7a5a')),
+      h('p', { class: 'kb-foot', text: 'Nominal angsuran = jumlah angsuran × Cicilan (Pokok + Margin). Satu pinjaman dapat masuk lebih dari satu kategori.' }));
+
+  // 4. Kondisi Sampai Hari Kemarin
+  const s4 = !L.progress ? h('div', { class: 'kb-stack' }, kbSkeleton(3), h('div', { class: 'kb-charts' }, h('div', { class: 'kb-card skel kb-skel tall' }), h('div', { class: 'kb-card skel kb-skel tall' })))
+    : h('div', { class: 'kb-stack' },
+      h('div', { class: 'kb-grid' },
+        kbMetricCard('PAR Baru · Peningkatan', rpShort(m.newBalance), fmt(m.newCount) + ' Member PAR', 'bad'),
+        kbMetricCard('PAR Selesai · Penyelesaian', rpShort(m.doneBalance), fmt(m.doneCount) + ' Member PAR', 'good'),
+        kbMetricCard('Penurunan Outstanding PAR By Angsuran', rpShort(m.red.amount || 0), fmt(m.red.loans || 0) + ' Loan No turun',
+          Number(m.red.amount) > 0 ? 'good' : Number(m.red.amount) < 0 ? 'warn' : '')),
+      h('div', { class: 'kb-charts' },
+        kbBarChart('Outstanding PAR (Rp)' + (m.recent.length ? ' · ' + m.recent.length + ' tanggal terakhir' : ''), m.recent.map(x => m.dd(x.date)),
+          m.recent.map(x => Number(x.newBalance) || 0), m.recent.map(x => Number(x.doneBalance) || 0), true),
+        kbBarChart('Member PAR (Loan No)' + (m.recent.length ? ' · ' + m.recent.length + ' tanggal terakhir' : ''), m.recent.map(x => m.dd(x.date)),
+          m.recent.map(x => Number(x.newCount) || 0), m.recent.map(x => Number(x.doneCount) || 0), false)));
+
+  // 5. Top Up Khusus yang Kembali PAR
+  const s5 = !L.progress ? kbSkeleton(2, true)
+    : h('div', null,
+      h('div', { class: 'kb-grid two' },
+        kbMetricCard('Total PAR Baru Top Up Khusus', fmt(m.khCount) + ' Loan No', (m.newCount ? nf1.format(m.khCount / m.newCount * 100) : '0') + '% dari seluruh PAR Baru', 'bad'),
+        kbMetricCard('Outstanding PAR', rpShort(m.khBalance), (m.newBalance ? nf1.format(m.khBalance / m.newBalance * 100) : '0') + '% dari Out. PAR Baru', 'bad')),
+      h('p', { class: 'kb-foot', text: 'Top Up Khusus = pinjaman kategori TOP UP KHUSUS yang tercatat sebagai PAR Baru.' }));
+
+  put(root, masthead, lead,
+    kbSection(1, 'Perkembangan Cabang', 'Analisa Cabang · ' + (L.analisa ? m.anLabel : 'memuat data…'), '#0a7a5a', s1, [['Analisa Cabang', 'analisa']]),
+    kbSection(2, 'Kondisi Permasalahan Cabang', 'Rekening Bergerak dan Analisa PAR', '#b43d3d', s2, [['Rekening Bergerak', 'move'], ['Analisa Cabang', 'analisa']]),
+    kbSection(3, 'Rekomendasi Penyelesaian', 'Tool PAR · ' + (L.tool ? fmt(Number(m.d.scanned) || 0) + ' pinjaman diperiksa' : 'memuat data…'), '#d0a12b', s3, [['Tool PAR', 'dash']]),
+    kbSection(4, 'Kondisi Sampai Hari Kemarin', 'Progres Harian · ' + (L.progress ? 'data sampai ' + (m.lastDate ? analisaLabelDate(m.lastDate) : '—') + ' · seluruh periode' : 'memuat data…'), '#2b6cb0', s4, [['Progres Harian', 'progress']]),
+    kbSection(5, 'Top Up Khusus yang Kembali PAR', 'Progres Harian · PAR Baru kategori Top Up Khusus · seluruh periode', '#b43d3d', s5, [['Progres Harian', 'progress']]),
+    h('p', { class: 'kb-foot kb-scope', text: 'Cakupan: ' + mainScope + (m.ph.scope ? ' · Progres Harian: ' + m.ph.scope : '') + '. Ringkasan informasi; rincian dan daftar pinjaman ada di Dashboard masing-masing.' }));
 }
 
 async function exportRegionalNewsImage() {
@@ -3151,7 +3339,7 @@ async function saveRekeningBergerakSetting() {
     state.rekening = null;
     invalidateRegionalNewsData();
     await loadRekeningBergerak();
-    if (state.dashboardPage === 'sum' && canDownloadImage()) prepareRegionalNewsData();
+    if (state.dashboardPage === 'sum') prepareRegionalNewsData();
   } catch (err) {
     setNote('rb-setting-msg', err && err.message ? err.message : 'Gagal menyimpan tanggal N.', 'bad');
   } finally {

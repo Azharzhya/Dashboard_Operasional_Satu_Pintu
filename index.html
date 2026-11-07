@@ -120,15 +120,15 @@
     <!-- Dashboard: satu menu utama dengan dua sub-menu -->
     <div id="p-dashboard" role="tabpanel" aria-labelledby="t-dashboard">
       <nav class="setnav" aria-label="Sub menu Dashboard">
+        <button type="button" class="setnav-btn" data-dashpage="sum" aria-pressed="true">Ringkasan</button>
         <button type="button" class="setnav-btn" data-dashpage="progress" aria-pressed="false">Progres Harian</button>
         <button type="button" class="setnav-btn" data-dashpage="analisa" aria-pressed="false">Analisa Cabang</button>
-        <button type="button" class="setnav-btn" data-dashpage="move" aria-pressed="true">Rekening Bergerak</button>
+        <button type="button" class="setnav-btn" data-dashpage="move" aria-pressed="false">Rekening Bergerak</button>
         <button type="button" class="setnav-btn" data-dashpage="dash" aria-pressed="false">Tool PAR</button>
-        <button type="button" class="setnav-btn" data-dashpage="sum" aria-pressed="false">Ringkasan</button>
       </nav>
 
       <!-- Dashboard: Rekening Bergerak (sub-menu default) -->
-      <div id="p-move" class="set-page" role="tabpanel">
+      <div id="p-move" class="set-page" role="tabpanel" hidden>
       <div class="dhead page-heading">
         <div>
           <div class="eyebrow"><span class="eyebrow-dot"></span> ANALISIS PORTOFOLIO</div>
@@ -252,11 +252,11 @@
       </div>
 
       <!-- Ringkasan (sub-menu Dashboard) -->
-      <div id="p-sum" class="set-page" role="tabpanel" aria-labelledby="t-dashboard" hidden>
+      <div id="p-sum" class="set-page" role="tabpanel" aria-labelledby="t-dashboard">
         <div class="page-heading summary-heading">
           <div><div class="eyebrow"><span class="eyebrow-dot"></span> IKHTISAR PORTOFOLIO</div>
             <h1 class="ph">Ringkasan</h1>
-            <p class="lead">Ikhtisar pinjaman per cabang/staf dan Kabar Berita Regional J.</p>
+            <p class="lead">Kabar Berita Regional J dan tabel ringkasan pinjaman.</p>
           </div>
           <div class="summary-news-action">
             <button class="btn primary image-download-btn" id="sum-news-img" type="button" disabled hidden>
@@ -266,6 +266,16 @@
           </div>
         </div>
         <p id="sum-news-msg" class="note summary-news-note" role="status" aria-live="polite"></p>
+
+        <!-- Kabar Berita: diisi oleh paintKabarBerita() -->
+        <div id="kb" class="kb" aria-label="Kabar Berita Regional J"></div>
+
+        <!-- Tabel ringkasan pinjaman (di bagian paling bawah) -->
+        <div class="kb-table-head">
+          <span class="eyebrow"><span class="eyebrow-dot"></span> TABEL RINGKASAN</span>
+          <h2>Ringkasan Pinjaman per Cabang / Staf</h2>
+          <p class="lead">Jumlah pinjaman dan Total Balance per kategori Tool PAR. Klik angka untuk membuka daftar pinjamannya.</p>
+        </div>
         <div class="dtools">
           <div class="seg" role="group" aria-label="Kelompokkan berdasarkan">
             <button type="button" data-g="branch" aria-pressed="true">Per cabang</button>
