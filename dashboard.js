@@ -283,7 +283,7 @@ const state = {
   progressRecap: 'new', progressDetailPage: 1, progressDetailSeq: 0, progressDetailResult: null,
   progressDetailCache: new Map(), progressDetailPending: new Map(),
   analisaCabang: null, analisaLoading: false, analisaLoadedAt: 0, analisaFilters: { branch: '*', period: '', compare: '' },
-  newsProgress: null, newsProgressLoadedAt: 0, newsLoading: false, newsPromise: null, newsLoadSeq: 0, newsReady: false,
+  kb: kbNew(), newsLoading: false, newsPromise: null, newsLoadSeq: 0, newsReady: false,
   rbView: 'branch', rbSearch: { branch: '', coordinator: '' },
   rbSort: { branch: { key: 'name', dir: 1 }, coordinator: { key: 'name', dir: 1 } },
 };
@@ -322,7 +322,7 @@ function invalidateDashboardPages(source) {
   }
   if (source !== 'dash') state.lastCheck = 0;          // Tool PAR memeriksa ulang ke server (jawaban ringan bila isi sama)
   state.analisaCabang = null; state.analisaLoadedAt = 0;
-  invalidateRegionalNewsData();
+  if (source !== 'sum') invalidateRegionalNewsData();   // sumber 'sum' = Kabar Berita sendiri: jangan membatalkan dirinya
 }
 
 function selectDashboardPage(which) {
@@ -467,6 +467,8 @@ function startAutoSync() {
       if (!state.progressLoading) loadProgresHarian({ automatic: true });
     } else if (!$('p-dashboard').hidden && state.dashboardPage === 'analisa') {
       if (!state.analisaLoading) loadAnalisaCabang({ automatic: true });
+    } else if (!$('p-dashboard').hidden && state.dashboardPage === 'sum') {
+      if (!state.newsLoading && reserveAutoSync()) prepareRegionalNewsData({ force: true });
     } else if (state.data && !state.loading) loadDash({ automatic: true });
   };
   // Jarak pemeriksaan tetap 2 menit; waktu pemeriksaan pertama disebar acak 0–20 detik
@@ -493,7 +495,7 @@ function logout(msg, forceRefresh) {
   state.progressDetailCache.clear(); state.progressDetailPending.clear();
   state.progressFilters = { branch: '', monthKey: '', progressDate: '', coordinatorNik: '' }; state.progressFilterRevision++;
   state.analisaCabang = null; state.analisaLoadedAt = 0; state.analisaLoading = false;
-  invalidateRegionalNewsData();
+  resetKabarBerita();
   clearDash(); resetUpload();
   showView('login', msg || '');
   // Hanya logout otomatis karena batas sinkron yang memaksa refresh penuh.
@@ -602,7 +604,7 @@ function enterApp(user) {
   $('ph-filter-month').value = ''; $('ph-filter-branch').value = ''; $('ph-filter-date').value = ''; $('ph-filter-user').value = '';
   state.analisaCabang = null; state.analisaLoadedAt = 0; state.analisaLoading = false;
   state.analisaFilters = { branch: '*', period: '', compare: '' };
-  invalidateRegionalNewsData();
+  resetKabarBerita();
   state.dashboardPage = 'sum';
   state.rbSearch = { branch: '', coordinator: '' };
   state.rbSort = { branch: { key: 'name', dir: 1 }, coordinator: { key: 'name', dir: 1 } };
@@ -2467,91 +2469,184 @@ async function regionalNewsWaitForModule(isLoading, label) {
   if (isLoading()) throw new Error(label + ' belum selesai dimuat. Coba buka kembali Ringkasan setelah sinkronisasi selesai.');
 }
 
-async function regionalNewsEnsureModule(label, isReady, isLoading, loadedAt, loader) {
-  if (isLoading()) await regionalNewsWaitForModule(isLoading, label);
-  if (isReady() && Date.now() - loadedAt() <= AUTO_SYNC_MS) return true;
-  if (!isLoading()) await loader();
-  if (isLoading()) await regionalNewsWaitForModule(isLoading, label);
-  if (!isReady()) throw new Error(label + ' belum berhasil dimuat. Periksa halaman modul tersebut, lalu buka Ringkasan kembali.');
-  return true;
+/* ---------------------------------------------------------------------
+   Data Kabar Berita: lapisan data MANDIRI (state.kb). Tidak memakai data/filter halaman Dashboard lain,
+   selalu mengambil data terbaru dari server (cache server sudah dipanaskan, jadi ringan), dan semua angka
+   untuk layar maupun gambar unduhan dihitung dari satu model yang sama (regionalNewsModel).
+   --------------------------------------------------------------------- */
+const KB_FRESH_MS = 60 * 1000;       // data berita dianggap segar selama 1 menit; "Muat ulang" memaksa ambil ulang
+function kbNew() {
+  return { branch: '', rekening: null, rekeningAt: 0, analisa: null, analisaAt: 0, tool: null, toolAt: 0, progress: Object.create(null), errors: {}, branchSig: '' };
 }
-
-async function regionalNewsLoadProgress(seq) {
-  const isCurrent = () => seq == null || seq === state.newsLoadSeq;
-  if (!isCurrent() || !state.user) throw new Error('Pemuatan Kabar Berita dibatalkan karena sesi atau data berubah.');
-  const now = Date.now();
-  if (state.newsProgress && now - state.newsProgressLoadedAt <= AUTO_SYNC_MS) return true;
-  const filters = state.progressFilters || {};
-  if (state.progress && !filters.branch && !filters.monthKey && !filters.progressDate && !filters.coordinatorNik
-      && now - state.progressLoadedAt <= AUTO_SYNC_MS) {
-    if (!isCurrent()) throw new Error('Pemuatan Kabar Berita dibatalkan karena data berubah.');
-    state.newsProgress = state.progress;
-    state.newsProgressLoadedAt = state.progressLoadedAt;
-    return true;
-  }
-  const r = await api('webProgresHarian', {
-    token: (session.get() || {}).token,
-    branch: '', monthKey: '', progressDate: '', coordinatorNik: ''
-  }, { retry: true });
-  if (!isCurrent() || !state.user) throw new Error('Pemuatan Kabar Berita dibatalkan karena sesi atau data berubah.');
-  if (r.code === 'SESSION_REQUIRED') {
-    logout(r.error);
-    throw new Error('Sesi berakhir. Silakan login kembali.');
-  }
+const kbKey = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim().toUpperCase();
+function kbBranchNames() {
+  const kb = state.kb, map = new Map();
+  const add = name => { const k = kbKey(name); if (k && !map.has(k)) map.set(k, String(name).replace(/\s+/g, ' ').trim()); };
+  if (kb.rekening) (kb.rekening.r.branchRows || []).forEach(x => add(x.branch));
+  if (kb.analisa) (kb.analisa.r.records || []).forEach(x => add(x.branch));
+  if (kb.tool) kb.tool.branches.forEach(add);
+  return [...map.values()].sort((a, b) => collator.compare(a, b));
+}
+function kbGuard(nik) {
+  if (!state.user || state.user.nik !== nik) throw new Error('Pemuatan Kabar Berita dibatalkan karena sesi atau data berubah.');
+}
+function kbSession(r) {
+  if (r.code === 'SESSION_REQUIRED') { logout(r.error); throw new Error('Sesi berakhir. Silakan login kembali.'); }
+}
+async function kbFetchRekening(nik) {
+  const r = await api('webRekeningBergerak', { token: (session.get() || {}).token }, { retry: true });
+  kbGuard(nik); kbSession(r);
+  if (!r.ok) throw new Error(r.error || 'Data Rekening Bergerak tidak dapat dimuat.');
+  noteDataVersion(r.dataVersion, 'sum');
+  state.kb.rekening = { r }; state.kb.rekeningAt = Date.now();
+}
+async function kbFetchAnalisa(nik) {
+  const r = await api('webAnalisaCabang', { token: (session.get() || {}).token }, { retry: true });
+  kbGuard(nik); kbSession(r);
+  if (!r.ok) throw new Error(r.error || 'Data Analisa Cabang tidak dapat dimuat.');
+  state.kb.analisa = { r }; state.kb.analisaAt = Date.now();
+}
+async function kbFetchProgress(nik, branch) {
+  const r = await api('webProgresHarian', { token: (session.get() || {}).token, branch: branch || '', monthKey: '', progressDate: '', coordinatorNik: '' }, { retry: true });
+  kbGuard(nik); kbSession(r);
   if (!r.ok) throw new Error(r.error || 'Data Progres Harian tidak dapat dimuat untuk Kabar Berita.');
-  state.newsProgress = r;
-  state.newsProgressLoadedAt = Date.now();
-  return true;
+  noteDataVersion(r.dataVersion, 'sum');
+  state.kb.progress[kbKey(branch)] = { r, at: Date.now() };
+}
+function kbToolFrom(d) {
+  const branches = new Set(); d.rows.forEach(r => { if (r[F.BRANCH]) branches.add(r[F.BRANCH]); });
+  return { d, ver: d.ver, branches };
+}
+const kbToolValid = d => !!(d && d.scopeSchema === 'wilayah-v1' && Array.isArray(d.rows) && typeof d.wajib === 'string');
+async function kbFetchTool(nik, force) {
+  const kb = state.kb;
+  await sleep(0);   // beri kesempatan permintaan Tool PAR yang baru dimulai saat login agar kita bergabung, bukan mengunduh dua kali
+  if (state.loading) await regionalNewsWaitForModule(() => state.loading, 'Tool PAR');
+  kbGuard(nik);
+  if (!force && kbToolValid(state.data) && Date.now() - state.lastCheck <= KB_FRESH_MS) {   // "Muat ulang" (force) selalu memeriksa ke server
+    if (!kb.tool || kb.tool.d !== state.data) kb.tool = kbToolFrom(state.data);
+    kb.toolAt = Date.now();
+    return;
+  }
+  let have = kb.tool ? kb.tool.d : null;
+  if (!have) {
+    const saved = await cache.get();
+    kbGuard(nik);
+    if (saved && saved.nik === nik && kbToolValid(saved.data)) have = saved.data;
+  }
+  const tok = (session.get() || {}).token;
+  let r = await api('webDashboard', { token: tok, ver: have ? have.ver : '' }, { retry: true });
+  kbGuard(nik); kbSession(r);
+  if (!r.ok || r.scopeSchema !== 'wilayah-v1' || (!r.same && typeof r.wajib !== 'string')) throw new Error(r.ok ? MSG_OLD_SERVER : (r.error || 'Data Tool PAR tidak dapat dimuat.'));
+  noteDataVersion(r.dataVersion, 'sum');
+  let d = r;
+  if (r.same) {
+    if (have && have.ver === r.ver) d = have;
+    else {
+      r = await api('webDashboard', { token: tok, ver: '' }, { retry: true });
+      kbGuard(nik); kbSession(r);
+      if (!r.ok || !kbToolValid(r)) throw new Error(r.ok ? MSG_OLD_SERVER : (r.error || 'Data Tool PAR tidak dapat dimuat.'));
+      d = r;
+    }
+  }
+  if (d !== have) {   // simpan ke cache lokal bersama agar halaman Tool PAR tidak perlu mengunduh ulang
+    const keep = () => cache.set({ nik, data: d });
+    if (window.requestIdleCallback) window.requestIdleCallback(keep, { timeout: 2000 }); else setTimeout(keep, 200);
+  }
+  if (!kb.tool || kb.tool.d !== d) kb.tool = kbToolFrom(d);
+  kb.toolAt = Date.now();
 }
 
 function regionalNewsSourcesReady() {
-  return !!(state.rekening && state.data && state.analisaCabang && state.newsProgress);
+  const kb = state.kb;
+  return !!(kb.rekening && kb.tool && kb.analisa && kb.progress[kbKey(kb.branch)]);
 }
 function regionalNewsAllReady() {
   return !!state.newsReady && regionalNewsSourcesReady();
 }
-
+// Tandai data berita usang (dimuat ulang saat Ringkasan dibuka). Data lama tetap tampil sampai data baru tiba.
 function invalidateRegionalNewsData() {
+  const kb = state.kb;
   state.newsLoadSeq++;
-  state.newsProgress = null; state.newsProgressLoadedAt = 0;
+  kb.rekeningAt = 0; kb.analisaAt = 0; kb.toolAt = 0; kb.progress = Object.create(null); kb.errors = {};
   state.newsLoading = false; state.newsPromise = null; state.newsReady = false;
   const button = $('sum-news-img');
   if (button) button.disabled = true;
 }
+// Hapus seluruh data berita (login/logout), termasuk pilihan filter.
+function resetKabarBerita() {
+  state.kb = kbNew();
+  invalidateRegionalNewsData();
+  kbFilterPaint();
+  const root = $('kb'); if (root) root.replaceChildren();
+}
+// Filter cabang di layar: mengisi pilihan dari cabang yang tersedia untuk akun ini.
+function kbFilterPaint() {
+  const sel = $('kb-branch'); if (!sel) return;
+  const names = kbBranchNames(), kb = state.kb;
+  if (kb.branch && !names.some(n => kbKey(n) === kbKey(kb.branch)) && (kb.rekening || kb.analisa || kb.tool)) kb.branch = '';
+  const sig = names.join('\u001f');
+  if (sig !== kb.branchSig || sel.options.length !== names.length + 1) {
+    kb.branchSig = sig;
+    sel.replaceChildren(h('option', { value: '', text: 'Semua Cabang' }), ...names.map(n => h('option', { value: n, text: n })));
+  }
+  sel.value = kb.branch || '';
+  const note = $('kb-filter-note');
+  if (note) note.textContent = kb.branch ? 'Semua angka dan gambar yang diunduh mengikuti cabang ' + kb.branch + '.' : 'Menampilkan seluruh cabang dalam cakupan akun ini.';
+}
 
-async function prepareRegionalNewsData() {
+// Keterangan "siap diunduh": menyebut cakupan cabang dan waktu pemeriksaan data paling lama di antara keempat sumber.
+function kbReadyNote() {
+  const kb = state.kb, entry = kb.progress[kbKey(kb.branch)];
+  const at = Math.min(kb.rekeningAt || Date.now(), kb.analisaAt || Date.now(), kb.toolAt || Date.now(), entry && entry.at || Date.now());
+  const stamp = new Date(at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+  setNote('sum-news-msg', canDownloadImage() ? 'Kabar Berita siap diunduh · ' + (kb.branch ? 'Cabang ' + kb.branch : 'Semua cabang') + ' · data terbaru, diperiksa ' + stamp + '.' : '', 'good');
+}
+
+async function prepareRegionalNewsData(options) {
   if (!state.user) return;
   if (state.newsPromise) return state.newsPromise;
-  const seq = ++state.newsLoadSeq;
-  const userNik = state.user.nik;
-  state.newsLoading = true; state.newsReady = false;
+  const force = !!(options && options.force), kb = state.kb, branch = kb.branch, bk = kbKey(branch), nik = state.user.nik, now = Date.now();
+  const fresh = (at, has) => !force && !!has && !!at && now - at <= KB_FRESH_MS;
+  const jobs = [];
+  if (!fresh(kb.rekeningAt, kb.rekening)) jobs.push(['Rekening Bergerak', () => kbFetchRekening(nik)]);
+  if (!fresh(kb.toolAt, kb.tool)) jobs.push(['Tool PAR', () => kbFetchTool(nik, force)]);
+  if (!fresh(kb.analisaAt, kb.analisa)) jobs.push(['Analisa Cabang', () => kbFetchAnalisa(nik)]);
+  if (!fresh(kb.progress[bk] && kb.progress[bk].at, kb.progress[bk])) jobs.push(['Progres Harian', () => kbFetchProgress(nik, branch)]);
   const button = $('sum-news-img');
+  if (!jobs.length) {          // semua sumber masih segar: tidak ada permintaan baru
+    state.newsReady = regionalNewsSourcesReady();
+    if (button) button.disabled = !state.newsReady;
+    if (state.newsReady) kbReadyNote();
+    kbFilterPaint(); paintKabarBerita();
+    return;
+  }
+  const seq = ++state.newsLoadSeq;
+  state.newsLoading = true; state.newsReady = false;
   if (button) button.disabled = true;
-  setNote('sum-news-msg', canDownloadImage() ? 'Mengumpulkan data Rekening Bergerak, Analisa Cabang, Progres Harian, dan Tool PAR…' : '');
-  paintKabarBerita();
+  jobs.forEach(([label]) => { delete kb.errors[label]; });
+  setNote('sum-news-msg', canDownloadImage() ? 'Mengambil data terbaru Kabar Berita…' : '');
+  kbFilterPaint(); paintKabarBerita();
 
-  const jobs = [
-    ['Rekening Bergerak', () => regionalNewsEnsureModule('Rekening Bergerak', () => !!state.rekening,
-      () => state.rekeningLoading, () => state.rekeningLoadedAt, () => loadRekeningBergerak())],
-    ['Tool PAR', () => regionalNewsEnsureModule('Tool PAR', () => !!state.data,
-      () => state.loading, () => state.lastCheck, () => loadDash())],
-    ['Analisa Cabang', () => regionalNewsEnsureModule('Analisa Cabang', () => !!state.analisaCabang,
-      () => state.analisaLoading, () => state.analisaLoadedAt, () => loadAnalisaCabang())],
-    ['Progres Harian', () => regionalNewsLoadProgress(seq)]
-  ];
   state.newsPromise = (async () => {
     const results = await Promise.all(jobs.map(async ([label, run]) => {
-      try { await run(); if (seq === state.newsLoadSeq) paintKabarBerita(); return { label, ok: true }; }
-      catch (error) { return { label, ok: false, error: error && error.message ? error.message : String(error) }; }
+      try {
+        await run();
+        if (state.user && state.user.nik === nik) { kbFilterPaint(); paintKabarBerita(); }
+        return { label, ok: true };
+      } catch (error) {
+        const message = error && error.message ? error.message : String(error);
+        if (state.user && state.user.nik === nik) kb.errors[label] = message;
+        return { label, ok: false, error: message };
+      }
     }));
-    if (seq !== state.newsLoadSeq || !state.user || state.user.nik !== userNik) return;
+    if (seq !== state.newsLoadSeq || !state.user || state.user.nik !== nik) return;
     const failed = results.filter(x => !x.ok);
     const complete = !failed.length && regionalNewsSourcesReady();
     state.newsReady = complete;
     if (button) button.disabled = !complete;
     if (complete) {
-      const stamp = new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
-      setNote('sum-news-msg', canDownloadImage() ? 'Kabar Berita siap diunduh. Empat sumber data berhasil disiapkan · diperiksa ' + stamp + '.' : '', 'good');
+      kbReadyNote();
     } else {
       const details = failed.map(x => x.label + ': ' + x.error);
       if (!failed.length) details.push('Masih ada sumber data yang belum tersedia.');
@@ -2562,7 +2657,7 @@ async function prepareRegionalNewsData() {
       state.newsLoading = false;
       state.newsPromise = null;
       if (button) button.disabled = !state.newsReady;
-      paintKabarBerita();
+      kbFilterPaint(); paintKabarBerita();
     }
   });
   return state.newsPromise;
@@ -2619,16 +2714,30 @@ function regionalNewsMetric(ctx, x, y, width, label, value, tone, detail) {
     width - 36, 21, 18, '400', '#728178');
 }
 
-function regionalNewsAggregateAnalisa() {
-  const data = state.analisaCabang || {}, records = Array.isArray(data.records) ? data.records : [];
+// Pembanding Analisa: tanggal TERAKHIR pada bulan sebelumnya (mis. 31 Okt untuk data terbaru 5 Nov).
+// Bila bulan sebelumnya tidak punya data, dipakai tanggal terakhir pada bulan terdekat sebelum bulan terbaru.
+function regionalNewsComparePeriod(periods, period) {
+  if (!period) return '';
+  const month = period.slice(0, 7);
+  return periods.filter(p => p.slice(0, 7) < month).sort((a, b) => b.localeCompare(a))[0] || '';
+}
+function regionalNewsPrevMonth(period) {
+  const y = Number(period.slice(0, 4)), m = Number(period.slice(5, 7));
+  const d = new Date(Date.UTC(y, m - 2, 1));
+  return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0');
+}
+function regionalNewsAggregateAnalisa(branchKey) {
+  const data = state.kb.analisa ? state.kb.analisa.r : {}, all = Array.isArray(data.records) ? data.records : [];
+  const records = branchKey ? all.filter(r => kbKey(r.branch) === branchKey) : all;
   const periods = Array.isArray(data.periods) ? data.periods.slice().sort((a, b) => b.localeCompare(a)) : [];
-  const period = periods[0] || records.map(r => r.period).filter(Boolean).sort().reverse()[0] || '';
+  const period = periods[0] || all.map(r => r.period).filter(Boolean).sort().reverse()[0] || '';
   const currentRows = period ? records.filter(r => r.period === period) : [];
-  const comparePeriod = period ? periods.find(p => p < period) || '' : '';
+  const comparePeriod = regionalNewsComparePeriod(periods, period);
   const compareRows = comparePeriod ? records.filter(r => r.period === comparePeriod) : [];
   return {
     period, comparePeriod, currentRows, current: analisaAggregate(currentRows),
     compare: compareRows.length ? analisaAggregate(compareRows) : null,
+    comparePrevMonth: !!comparePeriod && comparePeriod.slice(0, 7) === regionalNewsPrevMonth(period),
     topParBranch: currentRows.slice().sort((a, b) => (Number(b.outstandingPAR) || 0) - (Number(a.outstandingPAR) || 0))[0] || null
   };
 }
@@ -2748,22 +2857,27 @@ function regionalNewsBarChart(ctx, x, y, w, h, title, labels, up, down, money) {
 // Semua angka Kabar Berita dihitung di satu tempat agar gambar unduhan dan tampilan layar Ringkasan selalu sama.
 // Aman dipanggil saat sebagian sumber data belum selesai dimuat (bagian itu dibiarkan kosong/nol).
 function regionalNewsModel() {
-  // ---- Data
-  const rb = state.rekening || {}, rbRows = Array.isArray(rb.branchRows) ? rb.branchRows : [];
+  // ---- Data (semua dari state.kb; difilter menurut cabang terpilih)
+  const kb = state.kb, branch = kb.branch || '', bk = kbKey(branch), keepBranch = name => !bk || kbKey(name) === bk;
+  const rb = kb.rekening ? kb.rekening.r : {}, rbRows = (Array.isArray(rb.branchRows) ? rb.branchRows : []).filter(x => keepBranch(x.branch));
   const rbTotal = rbRows.reduce((s, r) => s + (Number(r.total) || 0), 0), rbActive = rbRows.reduce((s, r) => s + (Number(r.active) || 0), 0);
   const rbPct = rbTotal ? rbActive / rbTotal * 100 : 0, rbReady = !(rb.settingRequired || !rb.settingDate);
-  const an = regionalNewsAggregateAnalisa(), anReady = !!(an.period && an.currentRows.length);
+  const an = regionalNewsAggregateAnalisa(bk), anReady = !!(an.period && an.currentRows.length);
   const anDelta = (key, goodWhenUp) => regionalNewsDelta(an.current[key], an.compare ? an.compare[key] : null, goodWhenUp);
   const metricOf = key => ANALISA_METRICS.find(m => m.key === key);
   const anValue = key => { const m = metricOf(key); return m.kind === 'money' ? rpShort(an.current[key] || 0) : fmt(an.current[key] || 0); };
-  const anLabel = an.period ? analisaLabelDate(an.period) + (an.comparePeriod ? ' dibanding ' + analisaLabelDate(an.comparePeriod) : '') : 'Belum ada periode analisa';
+  const anLabel = an.period
+    ? analisaLabelDate(an.period) + (an.comparePeriod ? ' dibanding ' + (an.comparePrevMonth ? 'akhir bulan lalu, ' : '') + analisaLabelDate(an.comparePeriod) : '')
+    : 'Belum ada periode analisa';
   const sum = (rows, fn) => rows.reduce((s, r) => s + (Number(fn(r)) || 0), 0);
-  const catRows = k => state.byCat[k] || [];
+  const d = kb.tool ? kb.tool.d : {}, wajib = String(d.wajib || '');
+  const toolRows = kb.tool ? d.rows.filter(r => keepBranch(r[F.BRANCH])) : [];
+  const catRows = k => toolRows.filter(r => r[F.FLAGS].indexOf(k) > -1);
   const rowsA = catRows('a'), rows1 = catRows('1'), rowsS = catRows('s');
-  const angKali = sum(rowsA, r => COLS.angsuran.get(r, 'a'));
-  const angNominal = sum(rowsA, r => COLS.angsuran.get(r, 'a') * (Number(r[F.CICILAN]) || 0));
-  const d = state.data || {};
-  const ph = state.newsProgress || {}, pt = ph.totals || {}, red = ph.balanceReduction || { amount: 0, loans: 0 };
+  const kali = r => r[F.CICILAN] > 0 ? Math.floor((r[F.SUKARELA] + (wajib.indexOf('a') > -1 ? r[F.SIMP] : 0)) / r[F.CICILAN]) : 0;
+  const angKali = sum(rowsA, kali);
+  const angNominal = sum(rowsA, r => kali(r) * (Number(r[F.CICILAN]) || 0));
+  const phEntry = kb.progress[bk], ph = phEntry ? phEntry.r : {}, pt = ph.totals || {}, red = ph.balanceReduction || { amount: 0, loans: 0 };
   const newBalance = Number(pt.newBalance) || 0, doneBalance = Number(pt.doneBalance) || 0;
   const newCount = Number(pt.newCount) || 0, doneCount = Number(pt.doneCount) || 0;
   const daily = (Array.isArray(ph.dailyChart) ? ph.dailyChart : []).filter(x => x && x.date).slice().sort((a, b) => a.date.localeCompare(b.date));
@@ -2778,14 +2892,14 @@ function regionalNewsModel() {
     const dl = anDelta('outstandingPAR', false);
     lead.push('Outstanding PAR ' + (dl.dir < 0 ? 'turun ' : dl.dir > 0 ? 'naik ' : 'tetap ') + (dl.dir ? rpShort(Math.abs(dl.delta)) + ' ' : '') + 'dibanding ' + analisaLabelDate(an.comparePeriod) + '.');
   }
-  if (rbReady) lead.push('Rekening bergerak ' + nf1.format(rbPct) + '% (' + fmt(rbActive) + ' dari ' + fmt(rbTotal) + ' rekening PAR).');
+  if (rbReady && kb.rekening) lead.push('Rekening bergerak ' + nf1.format(rbPct) + '% (' + fmt(rbActive) + ' dari ' + fmt(rbTotal) + ' rekening PAR).');
   const net = newBalance - doneBalance;
-  if (state.newsProgress) lead.push(net > 0 ? 'PAR Baru ' + rpShort(newBalance) + ' lebih tinggi ' + rpShort(net) + ' dari PAR Selesai ' + rpShort(doneBalance) + '.'
+  if (phEntry) lead.push(net > 0 ? 'PAR Baru ' + rpShort(newBalance) + ' lebih tinggi ' + rpShort(net) + ' dari PAR Selesai ' + rpShort(doneBalance) + '.'
     : net < 0 ? 'PAR Selesai ' + rpShort(doneBalance) + ' lebih tinggi ' + rpShort(Math.abs(net)) + ' dari PAR Baru ' + rpShort(newBalance) + '.'
       : 'PAR Baru dan PAR Selesai seimbang pada ' + rpShort(newBalance) + '.');
   return {
-    rb, rbRows, rbTotal, rbActive, rbPct, rbReady, an, anReady, anDelta, metricOf, anValue, anLabel, sum, catRows, rowsA, rows1, rowsS, angKali, angNominal, d, ph, pt, red, newBalance, doneBalance, newCount, doneCount, daily, lastDate, recent, dd, khusus, khCount, khBalance, lead,
-    loaded: { rekening: !!state.rekening, analisa: !!state.analisaCabang, tool: !!state.data, progress: !!state.newsProgress }
+    rb, rbRows, rbTotal, rbActive, rbPct, rbReady, an, anReady, anDelta, metricOf, anValue, anLabel, sum, catRows, rowsA, rows1, rowsS, angKali, angNominal, d, ph, pt, red, newBalance, doneBalance, newCount, doneCount, daily, lastDate, recent, dd, khusus, khCount, khBalance, lead, branch,
+    loaded: { rekening: !!kb.rekening, analisa: !!kb.analisa, tool: !!kb.tool, progress: !!phEntry }
   };
 }
 
@@ -2800,7 +2914,7 @@ function imgBuildRegionalNews() {
   ctx.fillStyle = '#EEF4F0'; ctx.fillRect(0, 0, W, REGIONAL_NEWS_MAX_H);
 
   const {
-    rb, rbRows, rbTotal, rbActive, rbPct, rbReady, an, anReady, anDelta, metricOf, anValue, anLabel, sum, catRows, rowsA, rows1, rowsS, angKali, angNominal, d, ph, pt, red, newBalance, doneBalance, newCount, doneCount, daily, lastDate, recent, dd, khusus, khCount, khBalance, lead
+    rb, rbRows, rbTotal, rbActive, rbPct, rbReady, an, anReady, anDelta, metricOf, anValue, anLabel, sum, catRows, rowsA, rows1, rowsS, angKali, angNominal, d, ph, pt, red, newBalance, doneBalance, newCount, doneCount, daily, lastDate, recent, dd, khusus, khCount, khBalance, lead, branch
   } = regionalNewsModel();
 
   // ---- Masthead
@@ -2808,6 +2922,12 @@ function imgBuildRegionalNews() {
   ctx.fillStyle = '#E2B83E'; ctx.fillRect(M, 50, 14, 48);
   regionalNewsSingleLine(ctx, 'REGIONAL J  ·  KABAR OPERASIONAL', M + 34, 84, CW - 34, 22, 22, '700', '#BFE6D4');
   regionalNewsSingleLine(ctx, 'Kabar Berita', M, 184, CW, 88, 70, '700', '#FFFFFF');
+  // Cakupan cabang yang sedang ditampilkan di layar (filter) selalu ikut tercetak.
+  const scopeLabel = branch ? 'Cabang: ' + branch : 'Semua Cabang';
+  ctx.font = '700 24px Arial, sans-serif';
+  const pillW = Math.min(CW * 0.5, ctx.measureText(scopeLabel).width + 48);
+  imgRoundRect(ctx, W - M - pillW, 150, pillW, 46, 23, '#E2B83E', '#E2B83E');
+  regionalNewsSingleLine(ctx, scopeLabel, W - M - pillW + 24, 182, pillW - 48, 24, 16, '700', '#3B2E00');
   regionalNewsSingleLine(ctx, 'Lima poin yang perlu kita ketahui bersama.', M, 237, CW, 34, 30, '400', '#E2F1E8');
   regionalNewsSingleLine(ctx, new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }), M, 278, CW, 25, 22, '600', '#D6E9DF');
 
@@ -2995,6 +3115,10 @@ function kbSection(num, title, subtitle, accent, body, links) {
 const kbSkeleton = (n, two) => h('div', { class: 'kb-grid' + (two ? ' two' : ''), 'aria-hidden': 'true' },
   Array.from({ length: n }, () => h('div', { class: 'kb-card skel kb-skel' })));
 const kbMessage = text => h('p', { class: 'kb-empty', text });
+// Kerangka pemuatan, atau pesan galat bila sumbernya gagal dimuat.
+const kbWait = (label, n, two) => state.kb.errors[label]
+  ? kbMessage('Gagal memuat ' + label + ': ' + state.kb.errors[label] + ' Tekan "Muat ulang" untuk mencoba lagi.')
+  : kbSkeleton(n, two);
 
 function paintKabarBerita() {
   const root = $('kb');
@@ -3002,7 +3126,7 @@ function paintKabarBerita() {
   if (!state.user) { root.replaceChildren(); return; }
   const m = regionalNewsModel(), L = m.loaded;
   const allLoaded = L.rekening && L.analisa && L.tool && L.progress;
-  const stamp = (state.rekening && state.rekening.dataUpdated) || (state.data && state.data.updated) || '';
+  const stamp = (m.rb && m.rb.dataUpdated) || (m.d && m.d.updated) || '';
   const mainScope = state.user.tingkat === 'ADMINISTRATOR' ? 'Semua cabang' : 'Sesuai Wilayah Kerja akun';
 
   const masthead = h('header', { class: 'kb-mast' },
@@ -3012,6 +3136,7 @@ function paintKabarBerita() {
       h('p', { class: 'kb-tagline', text: 'Lima poin yang perlu kita ketahui bersama.' })),
     h('div', { class: 'kb-mast-meta' },
       h('span', { class: 'kb-date', text: new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) }),
+      h('span', { class: 'kb-chip gold', text: m.branch ? 'Cabang: ' + m.branch : 'Semua Cabang' }),
       stamp ? h('span', { class: 'kb-chip', text: 'Data per ' + fmtStamp(stamp) }) : null,
       state.newsLoading && !allLoaded ? h('span', { class: 'kb-chip' }, h('span', { class: 'spin' }), 'Memuat data…') : null));
 
@@ -3021,7 +3146,7 @@ function paintKabarBerita() {
     : null;
 
   // 1. Perkembangan Cabang
-  const s1 = !L.analisa ? kbSkeleton(6)
+  const s1 = !L.analisa ? kbWait('Analisa Cabang', 6)
     : !m.anReady ? kbMessage('Data Analisa Cabang belum tersedia. Unggah file Analisa melalui menu Unggah Excel agar perkembangan cabang dapat ditampilkan.')
       : h('div', { class: 'kb-grid' }, ['member', 'outstanding', 'disbursement', 'saving', 'repayment', 'margin'].map(key => {
         const mt = m.metricOf(key), money = mt.kind === 'money';
@@ -3029,7 +3154,7 @@ function paintKabarBerita() {
       }));
 
   // 2. Kondisi Permasalahan Cabang
-  const rbBlock = !L.rekening ? kbSkeleton(3)
+  const rbBlock = !L.rekening ? kbWait('Rekening Bergerak', 3)
     : !m.rbReady ? kbMessage('Rekening Bergerak belum dihitung: Tanggal N belum ditetapkan oleh Administrator atau User 0.')
       : h('div', null,
         h('div', { class: 'kb-grid' },
@@ -3038,7 +3163,7 @@ function paintKabarBerita() {
           kbMetricCard('Persentase Bergerak', nf1.format(m.rbPct) + '%', 'Dibanding total PAR', 'good')),
         h('div', { class: 'kb-meter', role: 'img', 'aria-label': 'Persentase rekening bergerak ' + nf1.format(m.rbPct) + ' persen' },
           h('i', { style: 'width:' + Math.min(100, Math.max(0, m.rbPct)).toFixed(1) + '%' })));
-  const anBlock = !L.analisa ? kbSkeleton(2, true)
+  const anBlock = !L.analisa ? kbWait('Analisa Cabang', 2, true)
     : !m.anReady ? kbMessage('Data Analisa Cabang belum tersedia.')
       : h('div', { class: 'kb-grid two' },
         kbChangeCard('Member PAR', m.anValue('memberPAR'), m.anDelta('memberPAR', false), false),
@@ -3048,7 +3173,7 @@ function paintKabarBerita() {
     h('h4', { class: 'kb-subhead', text: 'Analisa Cabang · PAR' + (m.anReady ? '  ·  ' + m.anLabel : '') }), anBlock);
 
   // 3. Rekomendasi Penyelesaian
-  const s3 = !L.tool ? kbSkeleton(3)
+  const s3 = !L.tool ? kbWait('Tool PAR', 3)
     : h('div', null,
       h('div', { class: 'kb-grid' },
         kbCategoryCard('Angsuran By Sukarela', m.rowsA.length, 'Nominal angsuran', rpShort(m.angNominal), fmt(m.angKali) + ' kali angsuran', '#0a7a5a'),
@@ -3057,7 +3182,7 @@ function paintKabarBerita() {
       h('p', { class: 'kb-foot', text: 'Nominal angsuran = jumlah angsuran × Cicilan (Pokok + Margin). Satu pinjaman dapat masuk lebih dari satu kategori.' }));
 
   // 4. Kondisi Sampai Hari Kemarin
-  const s4 = !L.progress ? h('div', { class: 'kb-stack' }, kbSkeleton(3), h('div', { class: 'kb-charts' }, h('div', { class: 'kb-card skel kb-skel tall' }), h('div', { class: 'kb-card skel kb-skel tall' })))
+  const s4 = !L.progress ? (state.kb.errors['Progres Harian'] ? kbWait('Progres Harian', 3) : h('div', { class: 'kb-stack' }, kbSkeleton(3), h('div', { class: 'kb-charts' }, h('div', { class: 'kb-card skel kb-skel tall' }), h('div', { class: 'kb-card skel kb-skel tall' }))))
     : h('div', { class: 'kb-stack' },
       h('div', { class: 'kb-grid' },
         kbMetricCard('PAR Baru · Peningkatan', rpShort(m.newBalance), fmt(m.newCount) + ' Member PAR', 'bad'),
@@ -3071,7 +3196,7 @@ function paintKabarBerita() {
           m.recent.map(x => Number(x.newCount) || 0), m.recent.map(x => Number(x.doneCount) || 0), false)));
 
   // 5. Top Up Khusus yang Kembali PAR
-  const s5 = !L.progress ? kbSkeleton(2, true)
+  const s5 = !L.progress ? kbWait('Progres Harian', 2, true)
     : h('div', null,
       h('div', { class: 'kb-grid two' },
         kbMetricCard('Total PAR Baru Top Up Khusus', fmt(m.khCount) + ' Loan No', (m.newCount ? nf1.format(m.khCount / m.newCount * 100) : '0') + '% dari seluruh PAR Baru', 'bad'),
@@ -3081,7 +3206,7 @@ function paintKabarBerita() {
   put(root, masthead, lead,
     kbSection(1, 'Perkembangan Cabang', 'Analisa Cabang · ' + (L.analisa ? m.anLabel : 'memuat data…'), '#0a7a5a', s1, [['Analisa Cabang', 'analisa']]),
     kbSection(2, 'Kondisi Permasalahan Cabang', 'Rekening Bergerak dan Analisa PAR', '#b43d3d', s2, [['Rekening Bergerak', 'move'], ['Analisa Cabang', 'analisa']]),
-    kbSection(3, 'Rekomendasi Penyelesaian', 'Tool PAR · ' + (L.tool ? fmt(Number(m.d.scanned) || 0) + ' pinjaman diperiksa' : 'memuat data…'), '#d0a12b', s3, [['Tool PAR', 'dash']]),
+    kbSection(3, 'Rekomendasi Penyelesaian', 'Tool PAR · ' + (L.tool ? (m.branch ? 'Cabang ' + m.branch : fmt(Number(m.d.scanned) || 0) + ' pinjaman diperiksa') : 'memuat data…'), '#d0a12b', s3, [['Tool PAR', 'dash']]),
     kbSection(4, 'Kondisi Sampai Hari Kemarin', 'Progres Harian · ' + (L.progress ? 'data sampai ' + (m.lastDate ? analisaLabelDate(m.lastDate) : '—') + ' · seluruh periode' : 'memuat data…'), '#2b6cb0', s4, [['Progres Harian', 'progress']]),
     kbSection(5, 'Top Up Khusus yang Kembali PAR', 'Progres Harian · PAR Baru kategori Top Up Khusus · seluruh periode', '#b43d3d', s5, [['Progres Harian', 'progress']]),
     h('p', { class: 'kb-foot kb-scope', text: 'Cakupan: ' + mainScope + (m.ph.scope ? ' · Progres Harian: ' + m.ph.scope : '') + '. Ringkasan informasi; rincian dan daftar pinjaman ada di Dashboard masing-masing.' }));
@@ -3100,7 +3225,8 @@ async function exportRegionalNewsImage() {
     if (!regionalNewsAllReady()) throw new Error('Data belum lengkap. Periksa keterangan pemuatan di halaman Ringkasan.');
     await nextFrame();
     const canvas = imgBuildRegionalNews();
-    await imgDownload(canvas, 'Kabar_Berita_Regional_J_' + today() + '.png', 0);
+    const scopeName = state.kb.branch ? state.kb.branch.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '') : 'Regional_J';
+    await imgDownload(canvas, 'Kabar_Berita_' + scopeName + '_' + today() + '.png', 0);
     setNote('sum-news-msg', 'Gambar "Kabar Berita" berhasil diunduh dan siap dibagikan.', 'good');
   } catch (error) {
     setNote('sum-news-msg', error && error.message ? error.message : 'Gagal membuat gambar Kabar Berita.', 'bad');
@@ -4573,7 +4699,7 @@ async function saveWilayah() {
   if (r.code === 'SESSION_REQUIRED') return logout(r.error);
   if (!r.ok) { updateWilayahDraft(); return setNote('wilayah-msg', r.error || 'Gagal menyimpan Wilayah Kerja.', 'bad'); }
   state.wilayahDrafts = Object.create(null);
-  invalidateRegionalNewsData();
+  resetKabarBerita();   // cakupan cabang berubah: buang data berita lama (termasuk pilihan filter)
   state.rekening = null; state.rekeningLoadedAt = 0;
   state.progress = null; state.progressLoadedAt = 0;
   state.analisaCabang = null; state.analisaLoadedAt = 0;
@@ -4747,6 +4873,13 @@ function bind() {
   drop.addEventListener('drop', e => pickFile(e.dataTransfer.files[0]));
   $('upgo').onclick = sendUpload;
   $('refresh-all').onclick = refreshAllData;
+  // Filter Kabar Berita: layar dan gambar unduhan memakai pilihan yang sama.
+  $('kb-branch').onchange = e => {
+    state.kb.branch = e.target.value || '';
+    state.newsLoadSeq++; state.newsPromise = null; state.newsLoading = false; state.newsReady = false;   // batalkan alur lama; hasil yang sudah tiba tetap disimpan
+    kbFilterPaint(); paintKabarBerita(); prepareRegionalNewsData();
+  };
+  $('kb-refresh').onclick = () => prepareRegionalNewsData({ force: true });
 
   // Pintasan: "/" langsung ke kolom cari; tab dibuka kembali setelah lama = cek pembaruan data
   document.addEventListener('keydown', e => {

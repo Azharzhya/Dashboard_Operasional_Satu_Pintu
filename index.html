@@ -268,6 +268,13 @@
         <p id="sum-news-msg" class="note summary-news-note" role="status" aria-live="polite"></p>
 
         <!-- Kabar Berita: diisi oleh paintKabarBerita() -->
+        <div class="kb-filter" id="kb-filter" aria-label="Filter Kabar Berita">
+          <label class="kb-filter-field" for="kb-branch"><span>Cabang</span>
+            <select id="kb-branch" aria-label="Filter cabang Kabar Berita"><option value="">Semua Cabang</option></select>
+          </label>
+          <button class="btn ghost sm" id="kb-refresh" type="button"><span class="btn-icon" aria-hidden="true">↻</span><span class="btn-label">Muat ulang data</span></button>
+          <p id="kb-filter-note" class="kb-filter-note" role="status"></p>
+        </div>
         <div id="kb" class="kb" aria-label="Kabar Berita Regional J"></div>
 
         <!-- Tabel ringkasan pinjaman (di bagian paling bawah) -->
