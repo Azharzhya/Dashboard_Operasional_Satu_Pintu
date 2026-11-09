@@ -3045,6 +3045,16 @@ function svgEl(tag, attrs, ...kids) {
   for (const c of kids.flat()) if (c != null && c !== false) e.append(c);
   return e;
 }
+// Ikon dekoratif kartu (garis sederhana 24x24, tidak membawa informasi sehingga disembunyikan dari pembaca layar).
+// Ikon dekoratif kartu (garis sederhana 24x24, hanya hiasan sehingga disembunyikan dari pembaca layar). Dipasang lewat DOM.
+const KB_ICONS = {
+  "users":[["circle",{"cx":"9","cy":"8","r":"3"}],["path",{"d":"M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"}],["circle",{"cx":"17","cy":"9","r":"2.5"}],["path",{"d":"M16.2 14.2c2.7.4 4.8 2.7 4.8 5.8"}]],"coins":[["ellipse",{"cx":"12","cy":"6","rx":"7","ry":"3"}],["path",{"d":"M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"}]],"send":[["path",{"d":"M7 17L17 7M9 7h8v8"}]],"wallet":[["rect",{"x":"3","y":"6","width":"18","height":"13","rx":"3"}],["path",{"d":"M3 10h18M16 14.5h2"}]],"repay":[["path",{"d":"M17 7L7 17M15 17H7V9"}]],"percent":[["path",{"d":"M19 5L5 19"}],["circle",{"cx":"7","cy":"7","r":"2.5"}],["circle",{"cx":"17","cy":"17","r":"2.5"}]],"alert":[["path",{"d":"M12 4l9 16H3z"}],["path",{"d":"M12 10v4M12 17.5v.5"}]],"pulse":[["path",{"d":"M3 12h4l3-8 4 16 3-8h4"}]],"gauge":[["circle",{"cx":"12","cy":"12","r":"9"}],["path",{"d":"M12 12V3M12 12l6.4 6.4"}]],"calendar":[["rect",{"x":"3","y":"5","width":"18","height":"16","rx":"3"}],["path",{"d":"M3 10h18M8 3v4M16 3v4M9 15l2 2 4-4"}]],"check":[["circle",{"cx":"12","cy":"12","r":"9"}],["path",{"d":"M8 12.5l3 3 5-6"}]],"lock":[["rect",{"x":"5","y":"11","width":"14","height":"10","rx":"2"}],["path",{"d":"M8 11V8a4 4 0 018 0v3"}]],"plus":[["circle",{"cx":"12","cy":"12","r":"9"}],["path",{"d":"M12 8v8M8 12h8"}]],"down":[["path",{"d":"M3 7l6 6 4-4 8 8M21 11v6h-6"}]],"star":[["path",{"d":"M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"}]]};
+function kbIcon(name) {
+  const shapes = KB_ICONS[name];
+  if (!shapes) return null;
+  return h('span', { class: 'kb-ico', 'aria-hidden': 'true' },
+    svgEl('svg', { viewBox: '0 0 24 24', focusable: 'false' }, shapes.map(([tag, attrs]) => svgEl(tag, attrs))));
+}
 function kbDeltaView(info, money) {
   if (!info.has) return h('div', { class: 'kb-delta neutral' }, h('span', { class: 'kb-diff', text: 'Belum ada periode pembanding' }));
   const tone = info.good === null ? 'neutral' : info.good ? 'good' : 'bad';
@@ -3055,20 +3065,24 @@ function kbDeltaView(info, money) {
     h('span', { class: 'kb-pct', text: pct }),
     h('span', { class: 'kb-diff', text: 'Perubahan ' + regionalNewsSigned(money, info.delta) }));
 }
-function kbChangeCard(label, valueText, info, money, fullValue) {
-  return h('article', { class: 'kb-card' },
+function kbChangeCard(label, valueText, info, money, fullValue, icon) {
+  const tone = info.has && info.good !== null ? (info.good ? 'good' : 'bad') : '';
+  return h('article', { class: 'kb-card' + (tone ? ' tone-' + tone : '') },
+    kbIcon(icon),
     h('span', { class: 'kb-label', text: label }),
     h('strong', { class: 'kb-value', text: valueText, title: fullValue || null }),
     kbDeltaView(info, money));
 }
-function kbMetricCard(label, valueText, note, tone) {
+function kbMetricCard(label, valueText, note, tone, icon) {
   return h('article', { class: 'kb-card' + (tone ? ' tone-' + tone : '') },
+    kbIcon(icon),
     h('span', { class: 'kb-label', text: label }),
     h('strong', { class: 'kb-value', text: valueText }),
     note ? h('span', { class: 'kb-note', text: note }) : null);
 }
-function kbCategoryCard(title, count, label, value, detail, accent) {
-  return h('article', { class: 'kb-card kb-cat', style: '--kb-cat:' + accent },
+function kbCategoryCard(title, count, label, value, detail, tone, icon) {
+  return h('article', { class: 'kb-card kb-cat' + (tone ? ' tone-' + tone : '') },
+    kbIcon(icon),
     h('span', { class: 'kb-label', text: title }),
     h('div', { class: 'kb-count' }, h('b', { text: fmt(count) }), h('span', { text: 'Loan No' })),
     h('div', { class: 'kb-cat-sum' }, h('span', { class: 'kb-label', text: label }), h('strong', { class: 'kb-money', text: value })),
@@ -3150,7 +3164,8 @@ function paintKabarBerita() {
     : !m.anReady ? kbMessage('Data Analisa Cabang belum tersedia. Unggah file Analisa melalui menu Unggah Excel agar perkembangan cabang dapat ditampilkan.')
       : h('div', { class: 'kb-grid' }, ['member', 'outstanding', 'disbursement', 'saving', 'repayment', 'margin'].map(key => {
         const mt = m.metricOf(key), money = mt.kind === 'money';
-        return kbChangeCard(mt.label, m.anValue(key), m.anDelta(key, true), money, money ? rp(m.an.current[key] || 0) : null);
+        const icon = { member: 'users', outstanding: 'coins', disbursement: 'send', saving: 'wallet', repayment: 'repay', margin: 'percent' }[key];
+        return kbChangeCard(mt.label, m.anValue(key), m.anDelta(key, true), money, money ? rp(m.an.current[key] || 0) : null, icon);
       }));
 
   // 2. Kondisi Permasalahan Cabang
@@ -3158,16 +3173,16 @@ function paintKabarBerita() {
     : !m.rbReady ? kbMessage('Rekening Bergerak belum dihitung: Tanggal N belum ditetapkan oleh Administrator atau User 0.')
       : h('div', null,
         h('div', { class: 'kb-grid' },
-          kbMetricCard('Total PAR', fmt(m.rbTotal), 'Rekening dalam cakupan akses'),
-          kbMetricCard('Rekening Bergerak', fmt(m.rbActive), 'Bertransaksi sejak Tanggal N', 'good'),
-          kbMetricCard('Persentase Bergerak', nf1.format(m.rbPct) + '%', 'Dibanding total PAR', 'good')),
+          kbMetricCard('Total PAR', fmt(m.rbTotal), 'Rekening dalam cakupan akses', '', 'alert'),
+          kbMetricCard('Rekening Bergerak', fmt(m.rbActive), 'Bertransaksi sejak Tanggal N', 'good', 'pulse'),
+          kbMetricCard('Persentase Bergerak', nf1.format(m.rbPct) + '%', 'Dibanding total PAR', 'good', 'gauge')),
         h('div', { class: 'kb-meter', role: 'img', 'aria-label': 'Persentase rekening bergerak ' + nf1.format(m.rbPct) + ' persen' },
           h('i', { style: 'width:' + Math.min(100, Math.max(0, m.rbPct)).toFixed(1) + '%' })));
   const anBlock = !L.analisa ? kbWait('Analisa Cabang', 2, true)
     : !m.anReady ? kbMessage('Data Analisa Cabang belum tersedia.')
       : h('div', { class: 'kb-grid two' },
-        kbChangeCard('Member PAR', m.anValue('memberPAR'), m.anDelta('memberPAR', false), false),
-        kbChangeCard('Outstanding PAR', m.anValue('outstandingPAR'), m.anDelta('outstandingPAR', false), true, rp(m.an.current.outstandingPAR || 0)));
+        kbChangeCard('Member PAR', m.anValue('memberPAR'), m.anDelta('memberPAR', false), false, null, 'users'),
+        kbChangeCard('Outstanding PAR', m.anValue('outstandingPAR'), m.anDelta('outstandingPAR', false), true, rp(m.an.current.outstandingPAR || 0), 'alert'));
   const s2 = h('div', { class: 'kb-stack' },
     h('h4', { class: 'kb-subhead', text: 'Rekening Bergerak' + (m.rbReady ? '  ·  Tanggal N: ' + rbDateLabel(m.rb.settingDate) : '') }), rbBlock,
     h('h4', { class: 'kb-subhead', text: 'Analisa Cabang · PAR' + (m.anReady ? '  ·  ' + m.anLabel : '') }), anBlock);
@@ -3176,19 +3191,19 @@ function paintKabarBerita() {
   const s3 = !L.tool ? kbWait('Tool PAR', 3)
     : h('div', null,
       h('div', { class: 'kb-grid' },
-        kbCategoryCard('Angsuran By Sukarela', m.rowsA.length, 'Nominal angsuran', rpShort(m.angNominal), fmt(m.angKali) + ' kali angsuran', '#0a7a5a'),
-        kbCategoryCard('Pelunasan di Bawah 100.000', m.rows1.length, 'Total Balance', rpShort(m.sum(m.rows1, r => r[F.BALANCE])), 'Sisa pelunasan sampai Rp 100.000', '#d0a12b'),
-        kbCategoryCard('Pelunasan dari Simpanan', m.rowsS.length, 'Total Balance', rpShort(m.sum(m.rowsS, r => r[F.BALANCE])), 'Simpanan sudah menutup Total Balance', '#0a7a5a')),
+        kbCategoryCard('Angsuran By Sukarela', m.rowsA.length, 'Nominal angsuran', rpShort(m.angNominal), fmt(m.angKali) + ' kali angsuran', 'good', 'calendar'),
+        kbCategoryCard('Pelunasan di Bawah 100.000', m.rows1.length, 'Total Balance', rpShort(m.sum(m.rows1, r => r[F.BALANCE])), 'Sisa pelunasan sampai Rp 100.000', 'warn', 'check'),
+        kbCategoryCard('Pelunasan dari Simpanan', m.rowsS.length, 'Total Balance', rpShort(m.sum(m.rowsS, r => r[F.BALANCE])), 'Simpanan sudah menutup Total Balance', 'good', 'lock')),
       h('p', { class: 'kb-foot', text: 'Nominal angsuran = jumlah angsuran × Cicilan (Pokok + Margin). Satu pinjaman dapat masuk lebih dari satu kategori.' }));
 
   // 4. Kondisi Sampai Hari Kemarin
   const s4 = !L.progress ? (state.kb.errors['Progres Harian'] ? kbWait('Progres Harian', 3) : h('div', { class: 'kb-stack' }, kbSkeleton(3), h('div', { class: 'kb-charts' }, h('div', { class: 'kb-card skel kb-skel tall' }), h('div', { class: 'kb-card skel kb-skel tall' }))))
     : h('div', { class: 'kb-stack' },
       h('div', { class: 'kb-grid' },
-        kbMetricCard('PAR Baru · Peningkatan', rpShort(m.newBalance), fmt(m.newCount) + ' Member PAR', 'bad'),
-        kbMetricCard('PAR Selesai · Penyelesaian', rpShort(m.doneBalance), fmt(m.doneCount) + ' Member PAR', 'good'),
+        kbMetricCard('PAR Baru · Peningkatan', rpShort(m.newBalance), fmt(m.newCount) + ' Member PAR', 'bad', 'plus'),
+        kbMetricCard('PAR Selesai · Penyelesaian', rpShort(m.doneBalance), fmt(m.doneCount) + ' Member PAR', 'good', 'check'),
         kbMetricCard('Penurunan Outstanding PAR By Angsuran', rpShort(m.red.amount || 0), fmt(m.red.loans || 0) + ' Loan No turun',
-          Number(m.red.amount) > 0 ? 'good' : Number(m.red.amount) < 0 ? 'warn' : '')),
+          Number(m.red.amount) > 0 ? 'good' : Number(m.red.amount) < 0 ? 'warn' : '', 'down')),
       h('div', { class: 'kb-charts' },
         kbBarChart('Outstanding PAR (Rp)' + (m.recent.length ? ' · ' + m.recent.length + ' tanggal terakhir' : ''), m.recent.map(x => m.dd(x.date)),
           m.recent.map(x => Number(x.newBalance) || 0), m.recent.map(x => Number(x.doneBalance) || 0), true),
@@ -3199,8 +3214,8 @@ function paintKabarBerita() {
   const s5 = !L.progress ? kbWait('Progres Harian', 2, true)
     : h('div', null,
       h('div', { class: 'kb-grid two' },
-        kbMetricCard('Total PAR Baru Top Up Khusus', fmt(m.khCount) + ' Loan No', (m.newCount ? nf1.format(m.khCount / m.newCount * 100) : '0') + '% dari seluruh PAR Baru', 'bad'),
-        kbMetricCard('Outstanding PAR', rpShort(m.khBalance), (m.newBalance ? nf1.format(m.khBalance / m.newBalance * 100) : '0') + '% dari Out. PAR Baru', 'bad')),
+        kbMetricCard('Total PAR Baru Top Up Khusus', fmt(m.khCount) + ' Loan No', (m.newCount ? nf1.format(m.khCount / m.newCount * 100) : '0') + '% dari seluruh PAR Baru', 'bad', 'star'),
+        kbMetricCard('Outstanding PAR', rpShort(m.khBalance), (m.newBalance ? nf1.format(m.khBalance / m.newBalance * 100) : '0') + '% dari Out. PAR Baru', 'bad', 'coins')),
       h('p', { class: 'kb-foot', text: 'Top Up Khusus = pinjaman kategori TOP UP KHUSUS yang tercatat sebagai PAR Baru.' }));
 
   put(root, masthead, lead,

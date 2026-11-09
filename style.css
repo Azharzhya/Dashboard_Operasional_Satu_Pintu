@@ -1080,31 +1080,43 @@ th.num .th{flex-direction:row-reverse}
 .kb-subhead::before{content:"";width:6px;height:20px;border-radius:3px;background:var(--kb-accent)}
 .kb-grid{display:grid;gap:14px;grid-template-columns:repeat(3,minmax(0,1fr))}
 .kb-grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
-.kb-card{display:flex;flex-direction:column;gap:6px;min-width:0;padding:16px 18px;border:1px solid var(--line);border-radius:16px;background:var(--tint)}
-.kb-label{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
-.kb-value{font-size:clamp(22px,2.6vw,30px);font-weight:800;line-height:1.15;color:var(--em-dd);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
-.kb-note{font-size:12.5px;color:var(--mute)}
-.kb-card.tone-good .kb-value{color:var(--em)}
-.kb-card.tone-bad .kb-value{color:var(--err)}
-.kb-card.tone-warn .kb-value{color:var(--yel-d)}
+/* Kartu informasi: bergaya banner Kabar Berita (gradien, aksen emas, lingkaran dekoratif, ikon).
+   Warna kartu menyampaikan makna: hijau = kabar baik, merah = perlu perhatian, emas = waspada, hijau tua = netral. */
+.kb-card{--kb-from:#064e3b;--kb-mid:#07644a;--kb-to:#0a7a5a;position:relative;isolation:isolate;overflow:hidden;display:flex;flex-direction:column;gap:7px;min-width:0;padding:18px 18px 16px;border-radius:18px;color:#fff;background:linear-gradient(135deg,var(--kb-from) 0%,var(--kb-mid) 58%,var(--kb-to) 100%);box-shadow:0 10px 22px rgba(6,78,59,.2);transition:transform .18s ease,box-shadow .18s ease}
+.kb-card::before{content:"";position:absolute;z-index:-1;right:-36px;top:-48px;width:140px;height:140px;border-radius:50%;background:rgba(246,201,21,.2)}
+.kb-card::after{content:"";position:absolute;z-index:-1;left:-34px;bottom:-66px;width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.08)}
+.kb-card:hover{transform:translateY(-2px);box-shadow:0 14px 28px rgba(6,78,59,.26)}
+.kb-card.tone-good{--kb-from:#065f46;--kb-mid:#0a7a5a;--kb-to:#12a37a}
+.kb-card.tone-bad{--kb-from:#7f1d1d;--kb-mid:#a52f2f;--kb-to:#c24a3c;box-shadow:0 10px 22px rgba(127,29,29,.22)}
+.kb-card.tone-warn{--kb-from:#5c4300;--kb-mid:#7d5c06;--kb-to:#96700a;box-shadow:0 10px 22px rgba(92,67,0,.22)}
+.kb-ico{position:absolute;right:14px;top:14px;display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.24)}
+.kb-ico svg{width:20px;height:20px;fill:none;stroke:#fff;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.kb-label{display:flex;align-items:center;gap:8px;min-height:18px;padding-right:48px;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.84)}
+.kb-label::before{content:"";flex:0 0 auto;width:5px;height:16px;border-radius:3px;background:var(--yel)}
+.kb-value{font-size:clamp(24px,2.8vw,34px);font-weight:800;line-height:1.12;color:#fff;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;text-shadow:0 1px 0 rgba(0,0,0,.12)}
+.kb-note{font-size:12.5px;color:rgba(255,255,255,.8)}
 
-.kb-delta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-top:4px;padding-top:10px;border-top:1px solid var(--line);font-weight:800;color:var(--mute)}
-.kb-delta.good{color:var(--em-d)}
-.kb-delta.bad{color:var(--err)}
+.kb-delta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;align-self:flex-start;max-width:100%;margin-top:6px;padding:7px 12px;border-radius:12px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.22);font-weight:800;color:#fff}
 .kb-pct{font-size:17px;font-variant-numeric:tabular-nums}
-.kb-diff{font-size:12.5px;font-weight:700}
+.kb-diff{font-size:12.5px;font-weight:700;color:rgba(255,255,255,.92)}
 .kb-tri{flex:0 0 auto;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent}
 .kb-delta.up .kb-tri{border-bottom:11px solid currentColor}
 .kb-delta.down .kb-tri{border-top:11px solid currentColor}
 .kb-delta.flat .kb-tri{width:14px;height:4px;border:0;border-radius:2px;background:currentColor}
 
-.kb-cat{border-left:5px solid var(--kb-cat,var(--em))}
 .kb-count{display:flex;align-items:baseline;gap:8px}
-.kb-count b{font-size:clamp(34px,4.4vw,46px);line-height:1;font-weight:800;color:var(--em-dd);font-variant-numeric:tabular-nums}
-.kb-count span{font-size:13px;font-weight:700;color:var(--mute)}
-.kb-cat-sum{display:grid;gap:3px;margin-top:6px;padding-top:10px;border-top:1px solid var(--line)}
-.kb-money{font-size:clamp(20px,2.2vw,26px);font-weight:800;color:var(--kb-cat,var(--em));font-variant-numeric:tabular-nums}
-.kb-cat[style*="#d0a12b"] .kb-money{color:var(--yel-d)}
+.kb-count b{font-size:clamp(36px,4.6vw,50px);line-height:1;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;text-shadow:0 1px 0 rgba(0,0,0,.12)}
+.kb-count span{font-size:13px;font-weight:700;color:rgba(255,255,255,.82)}
+.kb-cat-sum{display:grid;gap:3px;margin-top:6px;padding-top:11px;border-top:1px solid rgba(255,255,255,.26)}
+.kb-cat-sum .kb-label{padding-right:0}
+.kb-cat-sum .kb-label::before{display:none}
+.kb-money{font-size:clamp(20px,2.3vw,27px);font-weight:800;color:#fff;font-variant-numeric:tabular-nums}
+
+/* kerangka pemuatan tetap terang dan tenang */
+.kb-card.skel{background:linear-gradient(90deg,#edf4f0 25%,#f7faf8 50%,#edf4f0 75%);background-size:200% 100%;box-shadow:none;border:1px solid var(--line)}
+.kb-card.skel::before,.kb-card.skel::after{display:none}
+.kb-card.skel:hover{transform:none;box-shadow:none}
+@media (prefers-reduced-motion:reduce){.kb-card{transition:none}.kb-card:hover{transform:none}}
 
 .kb-meter{margin-top:14px;height:12px;border-radius:999px;background:var(--em-l);overflow:hidden}
 .kb-meter i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--em),var(--yel))}
