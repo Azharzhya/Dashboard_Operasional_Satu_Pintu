@@ -120,7 +120,7 @@
     <!-- Dashboard: satu menu utama dengan dua sub-menu -->
     <div id="p-dashboard" role="tabpanel" aria-labelledby="t-dashboard">
       <nav class="setnav" aria-label="Sub menu Dashboard">
-        <button type="button" class="setnav-btn" data-dashpage="sum" aria-pressed="true">Ringkasan</button>
+        <button type="button" class="setnav-btn" data-dashpage="sum" aria-pressed="true">Kabar Berita</button>
         <button type="button" class="setnav-btn" data-dashpage="progress" aria-pressed="false">Progres Harian</button>
         <button type="button" class="setnav-btn" data-dashpage="analisa" aria-pressed="false">Analisa Cabang</button>
         <button type="button" class="setnav-btn" data-dashpage="move" aria-pressed="false">Rekening Bergerak</button>
@@ -251,18 +251,17 @@
       <p id="dmsg" class="note" role="status"></p>
       </div>
 
-      <!-- Ringkasan (sub-menu Dashboard) -->
+      <!-- Kabar Berita (sub-menu Dashboard; id panel tetap p-sum) -->
       <div id="p-sum" class="set-page" role="tabpanel" aria-labelledby="t-dashboard">
         <div class="page-heading summary-heading">
           <div><div class="eyebrow"><span class="eyebrow-dot"></span> IKHTISAR PORTOFOLIO</div>
-            <h1 class="ph">Ringkasan</h1>
+            <h1 class="ph">Kabar Berita</h1>
             <p class="lead">Kabar Berita Regional J dan tabel ringkasan pinjaman.</p>
           </div>
           <div class="summary-news-action">
             <button class="btn primary image-download-btn" id="sum-news-img" type="button" disabled hidden>
               <span class="btn-icon" aria-hidden="true">▧</span><span class="btn-label">Unduh Kabar Berita</span>
             </button>
-            <span class="summary-news-caption">Kabar Berita</span>
           </div>
         </div>
         <p id="sum-news-msg" class="note summary-news-note" role="status" aria-live="polite"></p>
