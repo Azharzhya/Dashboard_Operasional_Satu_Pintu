@@ -2459,9 +2459,9 @@ function rpOrCount(metric, value) { return metric.kind === 'money' ? rp(value) :
    Sumber tetap memakai endpoint yang sudah menerapkan Wilayah_Kerja.
    Progres diminta tanpa filter tampilan agar mewakili seluruh cakupan user.
    --------------------------------------------------------------------- */
-const REGIONAL_NEWS_W = 1440;
+const REGIONAL_NEWS_W = 1600;
 const REGIONAL_NEWS_H = 2620;
-const REGIONAL_NEWS_M = 72;
+const REGIONAL_NEWS_M = 80;
 
 async function regionalNewsWaitForModule(isLoading, label) {
   const deadline = Date.now() + API_TIMEOUT_MS + 15000;
@@ -2703,17 +2703,6 @@ function regionalNewsPanel(ctx, y, height, number, title, subtitle, accent) {
   return { x: x + 30, y: y + 140, width: width - 60, height: height - 158 };
 }
 
-function regionalNewsMetric(ctx, x, y, width, label, value, tone, detail) {
-  const height = 150;
-  imgRoundRect(ctx, x, y, width, height, 18, '#F4F8F5', '#E0EAE3');
-  regionalNewsText(ctx, String(label || '').toLocaleUpperCase('id-ID'), x + 18, y + 29,
-    width - 36, '700 24px Arial, sans-serif', '#667A70', 2, 25);
-  regionalNewsSingleLine(ctx, value == null ? '—' : value, x + 18, y + 101,
-    width - 36, 48, 34, '700', tone || '#123D2F');
-  if (detail) regionalNewsSingleLine(ctx, detail, x + 18, y + 134,
-    width - 36, 21, 18, '400', '#728178');
-}
-
 // Pembanding Analisa: tanggal TERAKHIR pada bulan sebelumnya (mis. 31 Okt untuk data terbaru 5 Nov).
 // Bila bulan sebelumnya tidak punya data, dipakai tanggal terakhir pada bulan terdekat sebelum bulan terbaru.
 function regionalNewsComparePeriod(periods, period) {
@@ -2771,40 +2760,140 @@ function regionalNewsTriangle(ctx, cx, cy, s, dir, color) {
   ctx.closePath(); ctx.fill();
 }
 // Kartu: nilai terbaru besar, lalu persentase perubahan dan nilai perubahan dengan penanda naik/turun.
-function regionalNewsChangeCard(ctx, x, y, w, label, valueText, info, money) {
-  const h = 214;
-  imgRoundRect(ctx, x, y, w, h, 20, '#F4F8F5', '#E0EAE3');
-  regionalNewsText(ctx, String(label).toLocaleUpperCase('id-ID'), x + 22, y + 38, w - 44, '700 24px Arial, sans-serif', '#667A70', 1, 26);
-  regionalNewsSingleLine(ctx, valueText, x + 22, y + 104, w - 44, 52, 34, '700', RN_DARK);
-  ctx.fillStyle = '#DCE7E0'; ctx.fillRect(x + 22, y + 128, w - 44, 2);
+// Kartu rekomendasi: jumlah Loan No besar, lalu nominal / Total Balance.
+// ----- Kartu gambar: gradien bergaya banner Kabar Berita (sama dengan kartu di layar) -----
+const RN_TONES = { '': ['#064E3B', '#07644A', '#0A7A5A'], good: ['#065F46', '#0A7A5A', '#12A37A'], bad: ['#7F1D1D', '#A52F2F', '#C24A3C'], warn: ['#5C4300', '#7D5C06', '#96700A'] };
+const RN_LABEL_FONT = '700 21px Arial, sans-serif';
+const RN_PADX = 24, RN_ICON = 52;
+// Tinggi kartu (satu sumber untuk penggambaran dan perhitungan tata letak). lines = jumlah baris label (1-2).
+const rnMetricH = lines => 170 + (lines - 1) * 26;
+const rnChangeH = (lines, hasCompare) => (hasCompare ? 238 : 206) + (lines - 1) * 26;
+const rnCatH = lines => 288 + (lines - 1) * 26;
+
+function regionalNewsRoundPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+// Pecah teks menjadi baris menurut lebar (font harus sudah diatur) tanpa memotong.
+function regionalNewsLines(ctx, text, maxWidth) {
+  const words = String(text == null ? '' : text).replace(/\s+/g, ' ').trim().split(' ').filter(Boolean), lines = [];
+  let line = '';
+  words.forEach(word => {
+    const test = line ? line + ' ' + word : word;
+    if (line && ctx.measureText(test).width > maxWidth) { lines.push(line); line = word; } else line = test;
+  });
+  if (line) lines.push(line);
+  return lines;
+}
+// Jumlah baris label yang dibutuhkan (maksimal 2) agar semua kartu pada satu baris punya tinggi label yang sama.
+function regionalNewsLabelLines(ctx, labels, cardWidth) {
+  ctx.font = RN_LABEL_FONT;
+  return Math.min(2, Math.max(1, ...labels.map(t => regionalNewsLines(ctx, String(t).toLocaleUpperCase('id-ID'), cardWidth - 136).length)));
+}
+function regionalNewsDrawIcon(ctx, name, x, y, size) {
+  const shapes = KB_ICONS[name];
+  if (!shapes) return;
+  ctx.save();
+  ctx.translate(x, y); ctx.scale(size / 24, size / 24);
+  ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 1.9; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  shapes.forEach(([tag, a]) => {
+    if (tag === 'path') { ctx.stroke(new Path2D(a.d)); return; }
+    ctx.beginPath();
+    if (tag === 'circle') ctx.arc(+a.cx, +a.cy, +a.r, 0, Math.PI * 2);
+    else if (tag === 'ellipse') ctx.ellipse(+a.cx, +a.cy, +a.rx, +a.ry, 0, 0, Math.PI * 2);
+    else if (tag === 'rect') {
+      const rx = +a.x, ry = +a.y, rw = +a.width, rh = +a.height, r = +(a.rx || 0);
+      ctx.moveTo(rx + r, ry); ctx.arcTo(rx + rw, ry, rx + rw, ry + rh, r); ctx.arcTo(rx + rw, ry + rh, rx, ry + rh, r);
+      ctx.arcTo(rx, ry + rh, rx, ry, r); ctx.arcTo(rx, ry, rx + rw, ry, r); ctx.closePath();
+    }
+    ctx.stroke();
+  });
+  ctx.restore();
+}
+// Dasar kartu: bayangan, gradien, lingkaran dekoratif emas/putih, dan lencana ikon.
+function regionalNewsToneCard(ctx, x, y, w, h, tone, icon) {
+  const c = RN_TONES[tone] || RN_TONES[''];
+  ctx.save();
+  ctx.shadowColor = tone === 'bad' ? 'rgba(127,29,29,0.28)' : 'rgba(6,78,59,0.26)'; ctx.shadowBlur = 22; ctx.shadowOffsetY = 8;
+  imgRoundRect(ctx, x, y, w, h, 24, c[1]);
+  ctx.restore();
+  ctx.save();
+  regionalNewsRoundPath(ctx, x, y, w, h, 24); ctx.clip();
+  const g = ctx.createLinearGradient(x, y, x + w, y + h);
+  g.addColorStop(0, c[0]); g.addColorStop(0.58, c[1]); g.addColorStop(1, c[2]);
+  ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = 'rgba(246,201,21,0.20)'; ctx.beginPath(); ctx.arc(x + w - 22, y + 10, 88, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.beginPath(); ctx.arc(x + 14, y + h + 26, 92, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  if (icon) {
+    const bx = x + w - RN_PADX - RN_ICON, by = y + 20;
+    imgRoundRect(ctx, bx, by, RN_ICON, RN_ICON, 16, 'rgba(255,255,255,0.16)', 'rgba(255,255,255,0.26)');
+    regionalNewsDrawIcon(ctx, icon, bx + 12, by + 12, 28);
+  }
+}
+function regionalNewsCardHead(ctx, x, y, w, label, lines) {
+  ctx.fillStyle = '#F6C915'; ctx.fillRect(x + RN_PADX, y + 24, 6, 20);
+  ctx.font = RN_LABEL_FONT;
+  imgWrapText(ctx, String(label).toLocaleUpperCase('id-ID'), x + RN_PADX + 16, y + 40, w - 136, 26, lines, 'rgba(255,255,255,0.88)');
+}
+// Kartu angka sederhana: label, nilai besar, keterangan.
+function regionalNewsMetricCard(ctx, x, y, w, tone, icon, label, value, detail, lines) {
+  const h = rnMetricH(lines);
+  regionalNewsToneCard(ctx, x, y, w, h, tone, icon);
+  regionalNewsCardHead(ctx, x, y, w, label, lines);
+  const vy = y + 40 + (lines - 1) * 26 + 66;
+  regionalNewsSingleLine(ctx, value == null ? '—' : value, x + RN_PADX, vy, w - RN_PADX * 2, 56, 34, '700', '#FFFFFF');
+  if (detail) regionalNewsSingleLine(ctx, detail, x + RN_PADX, vy + 38, w - RN_PADX * 2, 22, 17, '400', 'rgba(255,255,255,0.84)');
+  return h;
+}
+// Kartu perubahan: nilai terbaru + kapsul (segitiga naik/turun, persentase, nilai perubahan).
+function regionalNewsChangeCard(ctx, x, y, w, label, valueText, info, money, icon, lines) {
+  const tone = info.has && info.good !== null ? (info.good ? 'good' : 'bad') : '';
+  const h = rnChangeH(lines, info.has);
+  regionalNewsToneCard(ctx, x, y, w, h, tone, icon);
+  regionalNewsCardHead(ctx, x, y, w, label, lines);
+  const vy = y + 40 + (lines - 1) * 26 + 66, cy = vy + 22, cx = x + RN_PADX;
+  regionalNewsSingleLine(ctx, valueText, cx, vy, w - RN_PADX * 2, 56, 34, '700', '#FFFFFF');
   if (!info.has) {
-    regionalNewsSingleLine(ctx, 'Belum ada periode pembanding', x + 22, y + 176, w - 44, 22, 18, '400', '#728178');
+    const text = 'Belum ada periode pembanding';
+    ctx.font = '600 21px Arial, sans-serif';
+    const cw = Math.min(w - RN_PADX * 2, ctx.measureText(text).width + 36);
+    imgRoundRect(ctx, cx, cy, cw, 52, 16, 'rgba(255,255,255,0.16)', 'rgba(255,255,255,0.24)');
+    regionalNewsSingleLine(ctx, text, cx + 18, cy + 33, cw - 36, 21, 16, '600', 'rgba(255,255,255,0.92)');
     return h;
   }
-  const color = info.good === null ? RN_GREY : info.good ? RN_GREEN : RN_RED;
-  regionalNewsTriangle(ctx, x + 36, y + 160, 12, info.dir, color);
-  const pctText = info.pct == null ? 'N/A (dasar 0)'
-    : (info.pct > 0 ? '+' : info.pct < 0 ? '−' : '') + nf1.format(Math.abs(info.pct)) + '%';
-  regionalNewsSingleLine(ctx, pctText, x + 62, y + 170, w - 86, 34, 24, '700', color);
-  regionalNewsSingleLine(ctx, 'Perubahan ' + regionalNewsSigned(money, info.delta), x + 22, y + 201, w - 44, 22, 17, '600', color);
+  const pctText = info.pct == null ? 'N/A (dasar 0)' : (info.pct > 0 ? '+' : info.pct < 0 ? '−' : '') + nf1.format(Math.abs(info.pct)) + '%';
+  const diffText = 'Perubahan ' + regionalNewsSigned(money, info.delta);
+  ctx.font = '700 32px Arial, sans-serif'; const pw = ctx.measureText(pctText).width;
+  ctx.font = '600 21px Arial, sans-serif'; const dw = ctx.measureText(diffText).width;
+  const cw = Math.min(w - RN_PADX * 2, Math.max(pw + 54, dw) + 36);
+  imgRoundRect(ctx, cx, cy, cw, 84, 16, 'rgba(255,255,255,0.16)', 'rgba(255,255,255,0.24)');
+  regionalNewsTriangle(ctx, cx + 30, cy + 29, 11, info.dir, '#FFFFFF');
+  regionalNewsSingleLine(ctx, pctText, cx + 54, cy + 40, cw - 54 - 18, 32, 22, '700', '#FFFFFF');
+  regionalNewsSingleLine(ctx, diffText, cx + 18, cy + 70, cw - 36, 21, 16, '600', 'rgba(255,255,255,0.94)');
   return h;
 }
 // Kartu rekomendasi: jumlah Loan No besar, lalu nominal / Total Balance.
-function regionalNewsCategoryCard(ctx, x, y, w, title, count, label, value, detail, accent) {
-  const h = 280;
-  imgRoundRect(ctx, x, y, w, h, 20, '#F4F8F5', '#E0EAE3');
-  ctx.fillStyle = accent; ctx.fillRect(x, y + 24, 6, 44);
-  regionalNewsText(ctx, String(title).toLocaleUpperCase('id-ID'), x + 22, y + 40, w - 44, '700 24px Arial, sans-serif', '#4B6055', 2, 27);
-  const num = fmt(count), numMax = w - 44 - 110;
-  regionalNewsSingleLine(ctx, num, x + 22, y + 148, numMax, 64, 40, '700', RN_DARK);
+function regionalNewsCategoryCard(ctx, x, y, w, title, count, label, value, detail, tone, icon, lines) {
+  const h = rnCatH(lines);
+  regionalNewsToneCard(ctx, x, y, w, h, tone, icon);
+  regionalNewsCardHead(ctx, x, y, w, title, lines);
+  const cy = y + 40 + (lines - 1) * 26 + 84, num = fmt(count), numMax = w - RN_PADX * 2 - 120;
+  regionalNewsSingleLine(ctx, num, x + RN_PADX, cy, numMax, 68, 42, '700', '#FFFFFF');
   const numW = Math.min(ctx.measureText(num).width, numMax);   // ctx.font masih ukuran angka setelah penyesuaian
-  regionalNewsSingleLine(ctx, 'Loan No', x + 22 + numW + 12, y + 148, 100, 24, 20, '600', '#728178');
-  ctx.fillStyle = '#DCE7E0'; ctx.fillRect(x + 22, y + 170, w - 44, 2);
-  regionalNewsSingleLine(ctx, String(label).toLocaleUpperCase('id-ID'), x + 22, y + 203, w - 44, 20, 17, '700', '#667A70');
-  regionalNewsSingleLine(ctx, value, x + 22, y + 243, w - 44, 40, 26, '700', accent === '#D0A12B' ? '#8A6A12' : accent);
-  if (detail) regionalNewsSingleLine(ctx, detail, x + 22, y + 269, w - 44, 19, 16, '400', '#728178');
+  regionalNewsSingleLine(ctx, 'Loan No', x + RN_PADX + numW + 12, cy, 110, 26, 20, '600', 'rgba(255,255,255,0.84)');
+  ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.fillRect(x + RN_PADX, cy + 24, w - RN_PADX * 2, 2);
+  regionalNewsSingleLine(ctx, String(label).toLocaleUpperCase('id-ID'), x + RN_PADX, cy + 24 + 38, w - RN_PADX * 2, 20, 17, '700', 'rgba(255,255,255,0.86)');
+  regionalNewsSingleLine(ctx, value, x + RN_PADX, cy + 24 + 38 + 46, w - RN_PADX * 2, 40, 26, '700', '#FFFFFF');
+  if (detail) regionalNewsSingleLine(ctx, detail, x + RN_PADX, cy + 24 + 38 + 46 + 34, w - RN_PADX * 2, 21, 17, '400', 'rgba(255,255,255,0.84)');
   return h;
 }
+
 function regionalNewsSubhead(ctx, x, y, width, text, color) {
   ctx.fillStyle = color || RN_GREEN; ctx.fillRect(x, y - 22, 8, 28);
   regionalNewsSingleLine(ctx, text, x + 20, y, width - 20, 28, 22, '700', '#2F4A3F');
@@ -2906,7 +2995,8 @@ function regionalNewsModel() {
 function imgBuildRegionalNews() {
   if (!canDownloadImage()) throw new Error('Fitur Download Gambar belum diaktifkan untuk tingkat akun ini.');
   if (!regionalNewsAllReady()) throw new Error('Empat sumber data belum lengkap. Tunggu proses pemuatan selesai, lalu coba kembali.');
-  const W = REGIONAL_NEWS_W, M = REGIONAL_NEWS_M, CW = W - M * 2, GAP = 18, SECTION_GAP = 22;
+  const W = REGIONAL_NEWS_W, M = REGIONAL_NEWS_M, CW = W - M * 2, GAP = 20, SECTION_GAP = 26, INNER = CW - 60;
+  const col3 = (INNER - GAP * 2) / 3, col2 = (INNER - GAP) / 2;
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = REGIONAL_NEWS_MAX_H;
   const ctx = canvas.getContext('2d');
@@ -2916,114 +3006,134 @@ function imgBuildRegionalNews() {
   const {
     rb, rbRows, rbTotal, rbActive, rbPct, rbReady, an, anReady, anDelta, metricOf, anValue, anLabel, sum, catRows, rowsA, rows1, rowsS, angKali, angNominal, d, ph, pt, red, newBalance, doneBalance, newCount, doneCount, daily, lastDate, recent, dd, khusus, khCount, khBalance, lead, branch
   } = regionalNewsModel();
+  const hasCmp = !!an.compare;
+  const wrapH = (text, width, font, lh, maxLines) => { ctx.font = font; return Math.min(maxLines, Math.max(1, regionalNewsLines(ctx, text, width).length)) * lh; };
 
-  // ---- Masthead
-  ctx.fillStyle = '#064E3B'; ctx.fillRect(0, 0, W, 300);
-  ctx.fillStyle = '#E2B83E'; ctx.fillRect(M, 50, 14, 48);
+  // ---- Masthead (gradien + lingkaran dekoratif, seperti kartu judul di layar)
+  const mg = ctx.createLinearGradient(0, 0, W, 300);
+  mg.addColorStop(0, '#064E3B'); mg.addColorStop(0.6, '#07644A'); mg.addColorStop(1, '#0A7A5A');
+  ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, 300); ctx.clip();
+  ctx.fillStyle = mg; ctx.fillRect(0, 0, W, 300);
+  ctx.fillStyle = 'rgba(246,201,21,0.16)'; ctx.beginPath(); ctx.arc(W - 70, 10, 210, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.beginPath(); ctx.arc(W - 470, 320, 160, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = '#F6C915'; ctx.fillRect(M, 50, 14, 48);
   regionalNewsSingleLine(ctx, 'REGIONAL J  ·  KABAR OPERASIONAL', M + 34, 84, CW - 34, 22, 22, '700', '#BFE6D4');
   regionalNewsSingleLine(ctx, 'Kabar Berita', M, 184, CW, 88, 70, '700', '#FFFFFF');
   // Cakupan cabang yang sedang ditampilkan di layar (filter) selalu ikut tercetak.
   const scopeLabel = branch ? 'Cabang: ' + branch : 'Semua Cabang';
   ctx.font = '700 24px Arial, sans-serif';
   const pillW = Math.min(CW * 0.5, ctx.measureText(scopeLabel).width + 48);
-  imgRoundRect(ctx, W - M - pillW, 150, pillW, 46, 23, '#E2B83E', '#E2B83E');
+  imgRoundRect(ctx, W - M - pillW, 150, pillW, 46, 23, '#F6C915', '#F6C915');
   regionalNewsSingleLine(ctx, scopeLabel, W - M - pillW + 24, 182, pillW - 48, 24, 16, '700', '#3B2E00');
   regionalNewsSingleLine(ctx, 'Lima poin yang perlu kita ketahui bersama.', M, 237, CW, 34, 30, '400', '#E2F1E8');
   regionalNewsSingleLine(ctx, new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }), M, 278, CW, 25, 22, '600', '#D6E9DF');
 
-  let y = 320;
-  const leadH = 92 + lead.length * 50;
+  // ---- Sorotan (kalimat dibungkus per kalimat, tidak dipotong)
+  const leadW = CW - 64 - 40, leadFont = '700 30px Arial, sans-serif';
+  ctx.font = leadFont;
+  const leadRows = lead.map(t => Math.min(2, Math.max(1, regionalNewsLines(ctx, t, leadW).length)));
+  let y = 324;
+  const leadH = 96 + leadRows.reduce((s, n) => s + n * 40 + 12, 0);
   imgRoundRect(ctx, M, y, CW, leadH, 24, '#FFFFFF', '#DDE8E1');
-  regionalNewsSingleLine(ctx, 'SOROTAN', M + 30, y + 52, CW - 60, 28, 26, '700', '#0A7654');
+  regionalNewsSingleLine(ctx, 'SOROTAN', M + 32, y + 54, CW - 64, 28, 26, '700', '#0A7654');
+  let by = y + 112;
   lead.forEach((text, i) => {
-    const by = y + 108 + i * 50;
-    ctx.fillStyle = '#E2B83E'; ctx.beginPath(); ctx.arc(M + 40, by - 9, 7, 0, Math.PI * 2); ctx.fill();
-    regionalNewsSingleLine(ctx, text, M + 64, by, CW - 100, 29, 21, '600', '#2F4A3F');
+    ctx.fillStyle = '#F6C915'; ctx.beginPath(); ctx.arc(M + 42, by - 10, 8, 0, Math.PI * 2); ctx.fill();
+    regionalNewsText(ctx, text, M + 68, by, leadW, leadFont, '#2F4A3F', 2, 40);
+    by += leadRows[i] * 40 + 12;
   });
   y += leadH + SECTION_GAP + 4;
 
   // ---- 1. Perkembangan Cabang
-  const colW3 = (CW - 60 - GAP * 2) / 3;
-  let p = regionalNewsPanel(ctx, y, 170 + 214 * 2 + GAP, 1, 'Perkembangan Cabang', 'Analisa Cabang · ' + anLabel, '#0A7A5A');
+  const keys1 = ['member', 'outstanding', 'disbursement', 'saving', 'repayment', 'margin'];
+  const l1 = regionalNewsLabelLines(ctx, keys1.map(k => metricOf(k).label), col3);
+  const chH1 = rnChangeH(l1, hasCmp), c1 = anReady ? chH1 * 2 + GAP : 130;
+  let p = regionalNewsPanel(ctx, y, 170 + c1, 1, 'Perkembangan Cabang', 'Analisa Cabang · ' + anLabel, '#0A7A5A');
   if (anReady) {
-    ['member', 'outstanding', 'disbursement', 'saving', 'repayment', 'margin'].forEach((key, i) => {
+    keys1.forEach((key, i) => {
       const m = metricOf(key), col = i % 3, row = Math.floor(i / 3);
-      regionalNewsChangeCard(ctx, p.x + col * (colW3 + GAP), p.y + row * (214 + GAP), colW3, m.label, anValue(key), anDelta(key, true), m.kind === 'money');
+      regionalNewsChangeCard(ctx, p.x + col * (col3 + GAP), p.y + row * (chH1 + GAP), col3, m.label, anValue(key), anDelta(key, true), m.kind === 'money', KB_METRIC_ICON[key], l1);
     });
   } else {
     regionalNewsText(ctx, 'Data Analisa Cabang belum tersedia. Unggah file Analisa melalui menu Unggah Excel agar perkembangan cabang dapat ditampilkan.',
       p.x, p.y + 40, p.width, '400 30px Arial, sans-serif', '#53665D', 3, 38);
   }
-  y += 170 + 214 * 2 + GAP + SECTION_GAP;
+  y += 170 + c1 + SECTION_GAP;
 
   // ---- 2. Kondisi Permasalahan Cabang
-  const s2H = 170 + 40 + 150 + 30 + 40 + 214 + 10;
-  p = regionalNewsPanel(ctx, y, s2H, 2, 'Kondisi Permasalahan Cabang', 'Rekening Bergerak dan Analisa PAR', '#B43D3D');
+  const l2a = regionalNewsLabelLines(ctx, ['Total PAR', 'Rekening Bergerak', 'Persentase Bergerak'], col3);
+  const l2b = regionalNewsLabelLines(ctx, ['Member PAR', 'Outstanding PAR'], col2);
+  const rbH = rbReady ? rnMetricH(l2a) : rnMetricH(1), anH = anReady ? rnChangeH(l2b, hasCmp) : 80;
+  const c2 = 40 + rbH + 30 + 40 + anH + 6;
+  p = regionalNewsPanel(ctx, y, 170 + c2, 2, 'Kondisi Permasalahan Cabang', 'Rekening Bergerak dan Analisa PAR', '#B43D3D');
   regionalNewsSubhead(ctx, p.x, p.y + 20, p.width, 'Rekening Bergerak' + (rbReady ? '  ·  Tanggal N: ' + rbDateLabel(rb.settingDate) : ''), '#B43D3D');
   if (rbReady) {
-    regionalNewsMetric(ctx, p.x, p.y + 40, colW3, 'Total PAR', fmt(rbTotal), RN_DARK, 'Rekening dalam cakupan akses');
-    regionalNewsMetric(ctx, p.x + colW3 + GAP, p.y + 40, colW3, 'Rekening Bergerak', fmt(rbActive), RN_GREEN, 'Bertransaksi sejak Tanggal N');
-    regionalNewsMetric(ctx, p.x + (colW3 + GAP) * 2, p.y + 40, colW3, 'Persentase Bergerak', nf1.format(rbPct) + '%', RN_GREEN, 'Dibanding total PAR');
+    regionalNewsMetricCard(ctx, p.x, p.y + 40, col3, '', 'alert', 'Total PAR', fmt(rbTotal), 'Rekening dalam cakupan akses', l2a);
+    regionalNewsMetricCard(ctx, p.x + col3 + GAP, p.y + 40, col3, 'good', 'pulse', 'Rekening Bergerak', fmt(rbActive), 'Bertransaksi sejak Tanggal N', l2a);
+    regionalNewsMetricCard(ctx, p.x + (col3 + GAP) * 2, p.y + 40, col3, 'good', 'gauge', 'Persentase Bergerak', nf1.format(rbPct) + '%', 'Dibanding total PAR', l2a);
   } else {
-    regionalNewsMetric(ctx, p.x, p.y + 40, p.width, 'Status', 'Belum dihitung', '#9B6A12', 'Tanggal N belum ditetapkan oleh Administrator atau User 0');
+    regionalNewsMetricCard(ctx, p.x, p.y + 40, p.width, 'warn', 'alert', 'Status', 'Belum dihitung', 'Tanggal N belum ditetapkan oleh Administrator atau User 0', 1);
   }
-  const rowB = p.y + 40 + 150 + 30;
+  const rowB = p.y + 40 + rbH + 30;
   regionalNewsSubhead(ctx, p.x, rowB + 14, p.width, 'Analisa Cabang · PAR' + (anReady ? '  ·  ' + anLabel : ''), '#B43D3D');
   if (anReady) {
-    const colW2 = (p.width - GAP) / 2;
-    regionalNewsChangeCard(ctx, p.x, rowB + 40, colW2, 'Member PAR', anValue('memberPAR'), anDelta('memberPAR', false), false);
-    regionalNewsChangeCard(ctx, p.x + colW2 + GAP, rowB + 40, colW2, 'Outstanding PAR', anValue('outstandingPAR'), anDelta('outstandingPAR', false), true);
+    regionalNewsChangeCard(ctx, p.x, rowB + 40, col2, 'Member PAR', anValue('memberPAR'), anDelta('memberPAR', false), false, 'users', l2b);
+    regionalNewsChangeCard(ctx, p.x + col2 + GAP, rowB + 40, col2, 'Outstanding PAR', anValue('outstandingPAR'), anDelta('outstandingPAR', false), true, 'alert', l2b);
   } else {
     regionalNewsText(ctx, 'Data Analisa Cabang belum tersedia.', p.x, rowB + 70, p.width, '400 30px Arial, sans-serif', '#53665D', 2, 38);
   }
-  y += s2H + SECTION_GAP;
+  y += 170 + c2 + SECTION_GAP;
 
   // ---- 3. Rekomendasi Penyelesaian
-  const s3H = 170 + 280 + 14 + 30;
-  p = regionalNewsPanel(ctx, y, s3H, 3, 'Rekomendasi Penyelesaian', 'Tool PAR · ' + fmt(Number(d.scanned) || 0) + ' pinjaman diperiksa', '#D0A12B');
-  regionalNewsCategoryCard(ctx, p.x, p.y, colW3, 'Angsuran By Sukarela', rowsA.length, 'Nominal angsuran', rpShort(angNominal), fmt(angKali) + ' kali angsuran', '#0A7A5A');
-  regionalNewsCategoryCard(ctx, p.x + colW3 + GAP, p.y, colW3, 'Pelunasan di Bawah 100.000', rows1.length, 'Total Balance', rpShort(sum(rows1, r => r[F.BALANCE])), 'Sisa pelunasan sampai Rp 100.000', '#D0A12B');
-  regionalNewsCategoryCard(ctx, p.x + (colW3 + GAP) * 2, p.y, colW3, 'Pelunasan dari Simpanan', rowsS.length, 'Total Balance', rpShort(sum(rowsS, r => r[F.BALANCE])), 'Simpanan sudah menutup Total Balance', '#0A7A5A');
-  regionalNewsSingleLine(ctx, 'Nominal angsuran = jumlah angsuran × Cicilan (Pokok + Margin). Satu pinjaman dapat masuk lebih dari satu kategori.',
-    p.x, p.y + 280 + 34, p.width, 19, 16, '400', '#728178');
-  y += s3H + SECTION_GAP;
+  const l3 = regionalNewsLabelLines(ctx, ['Angsuran By Sukarela', 'Pelunasan di Bawah 100.000', 'Pelunasan dari Simpanan'], col3);
+  const note3 = 'Nominal angsuran = jumlah angsuran × Cicilan (Pokok + Margin). Satu pinjaman dapat masuk lebih dari satu kategori.';
+  const n3 = wrapH(note3, INNER, '400 19px Arial, sans-serif', 28, 2), c3 = rnCatH(l3) + 18 + n3 + 4;
+  p = regionalNewsPanel(ctx, y, 170 + c3, 3, 'Rekomendasi Penyelesaian', 'Tool PAR · ' + (branch ? 'Cabang ' + branch : fmt(Number(d.scanned) || 0) + ' pinjaman diperiksa'), '#D0A12B');
+  regionalNewsCategoryCard(ctx, p.x, p.y, col3, 'Angsuran By Sukarela', rowsA.length, 'Nominal angsuran', rpShort(angNominal), fmt(angKali) + ' kali angsuran', 'good', 'calendar', l3);
+  regionalNewsCategoryCard(ctx, p.x + col3 + GAP, p.y, col3, 'Pelunasan di Bawah 100.000', rows1.length, 'Total Balance', rpShort(sum(rows1, r => r[F.BALANCE])), 'Sisa pelunasan sampai Rp 100.000', 'warn', 'check', l3);
+  regionalNewsCategoryCard(ctx, p.x + (col3 + GAP) * 2, p.y, col3, 'Pelunasan dari Simpanan', rowsS.length, 'Total Balance', rpShort(sum(rowsS, r => r[F.BALANCE])), 'Simpanan sudah menutup Total Balance', 'good', 'lock', l3);
+  regionalNewsText(ctx, note3, p.x, p.y + rnCatH(l3) + 18 + 20, INNER, '400 19px Arial, sans-serif', '#728178', 2, 28);
+  y += 170 + c3 + SECTION_GAP;
 
   // ---- 4. Kondisi Sampai Hari Kemarin
-  const chartH = 380, s4H = 170 + 150 + 26 + chartH;
-  p = regionalNewsPanel(ctx, y, s4H, 4, 'Kondisi Sampai Hari Kemarin', 'Progres Harian · data sampai ' + (lastDate ? analisaLabelDate(lastDate) : '—') + ' · seluruh periode', '#2B6CB0');
-  regionalNewsMetric(ctx, p.x, p.y, colW3, 'PAR Baru · Peningkatan', rpShort(newBalance), RN_RED, fmt(newCount) + ' Member PAR');
-  regionalNewsMetric(ctx, p.x + colW3 + GAP, p.y, colW3, 'PAR Selesai · Penyelesaian', rpShort(doneBalance), RN_GREEN, fmt(doneCount) + ' Member PAR');
-  regionalNewsMetric(ctx, p.x + (colW3 + GAP) * 2, p.y, colW3, 'Penurunan Outstanding PAR By Angsuran', rpShort(red.amount || 0),
-    Number(red.amount) > 0 ? RN_GREEN : Number(red.amount) < 0 ? '#A66A08' : RN_GREY, fmt(red.loans || 0) + ' Loan No turun');
-  const cw2 = (p.width - GAP) / 2, cy = p.y + 150 + 26, ctxt = recent.length ? ' · ' + recent.length + ' tanggal terakhir' : '';
-  regionalNewsBarChart(ctx, p.x, cy, cw2, chartH, 'Outstanding PAR (Rp)' + ctxt, recent.map(x => dd(x.date)),
+  const l4 = regionalNewsLabelLines(ctx, ['PAR Baru · Peningkatan', 'PAR Selesai · Penyelesaian', 'Penurunan Outstanding PAR By Angsuran'], col3);
+  const chartH = 420, c4 = rnMetricH(l4) + 30 + chartH;
+  p = regionalNewsPanel(ctx, y, 170 + c4, 4, 'Kondisi Sampai Hari Kemarin', 'Progres Harian · data sampai ' + (lastDate ? analisaLabelDate(lastDate) : '—') + ' · seluruh periode', '#2B6CB0');
+  regionalNewsMetricCard(ctx, p.x, p.y, col3, 'bad', 'plus', 'PAR Baru · Peningkatan', rpShort(newBalance), fmt(newCount) + ' Member PAR', l4);
+  regionalNewsMetricCard(ctx, p.x + col3 + GAP, p.y, col3, 'good', 'check', 'PAR Selesai · Penyelesaian', rpShort(doneBalance), fmt(doneCount) + ' Member PAR', l4);
+  regionalNewsMetricCard(ctx, p.x + (col3 + GAP) * 2, p.y, col3, Number(red.amount) > 0 ? 'good' : Number(red.amount) < 0 ? 'warn' : '', 'down', 'Penurunan Outstanding PAR By Angsuran', rpShort(red.amount || 0), fmt(red.loans || 0) + ' Loan No turun', l4);
+  const cy4 = p.y + rnMetricH(l4) + 30, ctxt = recent.length ? ' · ' + recent.length + ' tanggal terakhir' : '';
+  regionalNewsBarChart(ctx, p.x, cy4, col2, chartH, 'Outstanding PAR (Rp)' + ctxt, recent.map(x => dd(x.date)),
     recent.map(x => Number(x.newBalance) || 0), recent.map(x => Number(x.doneBalance) || 0), true);
-  regionalNewsBarChart(ctx, p.x + cw2 + GAP, cy, cw2, chartH, 'Member PAR (Loan No)' + ctxt, recent.map(x => dd(x.date)),
+  regionalNewsBarChart(ctx, p.x + col2 + GAP, cy4, col2, chartH, 'Member PAR (Loan No)' + ctxt, recent.map(x => dd(x.date)),
     recent.map(x => Number(x.newCount) || 0), recent.map(x => Number(x.doneCount) || 0), false);
-  y += s4H + SECTION_GAP;
+  y += 170 + c4 + SECTION_GAP;
 
   // ---- 5. Top Up Khusus yang kembali PAR
-  const s5H = 170 + 150 + 14 + 30;
-  p = regionalNewsPanel(ctx, y, s5H, 5, 'Top Up Khusus yang Kembali PAR', 'Progres Harian · PAR Baru kategori Top Up Khusus · seluruh periode', '#B43D3D');
-  const cw5 = (p.width - GAP) / 2;
-  regionalNewsMetric(ctx, p.x, p.y, cw5, 'Total PAR Baru Top Up Khusus', fmt(khCount) + ' Loan No', RN_RED,
-    (newCount ? nf1.format(khCount / newCount * 100) : '0') + '% dari seluruh PAR Baru');
-  regionalNewsMetric(ctx, p.x + cw5 + GAP, p.y, cw5, 'Outstanding PAR', rpShort(khBalance), RN_RED,
-    (newBalance ? nf1.format(khBalance / newBalance * 100) : '0') + '% dari Out. PAR Baru');
-  regionalNewsSingleLine(ctx, 'Top Up Khusus = pinjaman kategori TOP UP KHUSUS yang tercatat sebagai PAR Baru.',
-    p.x, p.y + 150 + 34, p.width, 19, 16, '400', '#728178');
-  y += s5H + SECTION_GAP;
+  const l5 = regionalNewsLabelLines(ctx, ['Total PAR Baru Top Up Khusus', 'Outstanding PAR'], col2);
+  const note5 = 'Top Up Khusus = pinjaman kategori TOP UP KHUSUS yang tercatat sebagai PAR Baru.';
+  const n5 = wrapH(note5, INNER, '400 19px Arial, sans-serif', 28, 2), c5 = rnMetricH(l5) + 18 + n5 + 4;
+  p = regionalNewsPanel(ctx, y, 170 + c5, 5, 'Top Up Khusus yang Kembali PAR', 'Progres Harian · PAR Baru kategori Top Up Khusus · seluruh periode', '#B43D3D');
+  regionalNewsMetricCard(ctx, p.x, p.y, col2, 'bad', 'star', 'Total PAR Baru Top Up Khusus', fmt(khCount) + ' Loan No',
+    (newCount ? nf1.format(khCount / newCount * 100) : '0') + '% dari seluruh PAR Baru', l5);
+  regionalNewsMetricCard(ctx, p.x + col2 + GAP, p.y, col2, 'bad', 'coins', 'Outstanding PAR', rpShort(khBalance),
+    (newBalance ? nf1.format(khBalance / newBalance * 100) : '0') + '% dari Out. PAR Baru', l5);
+  regionalNewsText(ctx, note5, p.x, p.y + rnMetricH(l5) + 18 + 20, INNER, '400 19px Arial, sans-serif', '#728178', 2, 28);
+  y += 170 + c5 + SECTION_GAP;
 
-  // ---- Footer
+  // ---- Footer (kalimat dibungkus, tidak dipotong)
   ctx.fillStyle = '#D8E4DC'; ctx.fillRect(M, y, CW, 3);
   const mainScope = state.user && state.user.tingkat === 'ADMINISTRATOR' ? 'Semua cabang' : 'Sesuai Wilayah Kerja akun';
-  regionalNewsSingleLine(ctx, 'Cakupan Analisa Cabang, Rekening Bergerak, dan Tool PAR: ' + mainScope, M, y + 40, CW, 20, 18, '600', '#405B4E');
-  regionalNewsSingleLine(ctx, 'Cakupan Progres Harian: ' + (ph.scope || mainScope), M, y + 76, CW, 20, 18, '600', '#405B4E');
-  regionalNewsSingleLine(ctx, 'Dibuat ' + new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })
-    + '  ·  Sumber: Analisa Cabang, Rekening Bergerak, Data_Upload, PAR Baru/PAR Selesai, dan Rekening_Bergerak_Angsuran.',
-  M, y + 112, CW, 20, 17, '400', '#728178');
-  regionalNewsSingleLine(ctx, 'Ringkasan informasi. Untuk rincian dan daftar pinjaman, buka Dashboard masing-masing.', M, y + 148, CW, 20, 17, '400', '#87958D');
-  const total = y + 190;
+  const footer = [
+    ['Cakupan Analisa Cabang, Rekening Bergerak, dan Tool PAR: ' + (branch ? 'Cabang ' + branch : mainScope), '600 20px Arial, sans-serif', '#405B4E'],
+    ['Cakupan Progres Harian: ' + (ph.scope || mainScope), '600 20px Arial, sans-serif', '#405B4E'],
+    ['Dibuat ' + new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) + '  ·  Sumber: Analisa Cabang, Rekening Bergerak, Data_Upload, PAR Baru/PAR Selesai, dan Rekening_Bergerak_Angsuran.', '400 18px Arial, sans-serif', '#728178'],
+    ['Ringkasan informasi. Untuk rincian dan daftar pinjaman, buka Dashboard masing-masing.', '400 18px Arial, sans-serif', '#87958D']
+  ];
+  let fy = y + 42;
+  footer.forEach(([text, font, color]) => { fy = regionalNewsText(ctx, text, M, fy, CW, font, color, 2, 26) + 10; });
+  const total = fy + 34;
 
   // Potong sesuai isi agar tidak ada ruang kosong di bawah.
   const out = document.createElement('canvas');
@@ -3049,6 +3159,8 @@ function svgEl(tag, attrs, ...kids) {
 // Ikon dekoratif kartu (garis sederhana 24x24, hanya hiasan sehingga disembunyikan dari pembaca layar). Dipasang lewat DOM.
 const KB_ICONS = {
   "users":[["circle",{"cx":"9","cy":"8","r":"3"}],["path",{"d":"M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"}],["circle",{"cx":"17","cy":"9","r":"2.5"}],["path",{"d":"M16.2 14.2c2.7.4 4.8 2.7 4.8 5.8"}]],"coins":[["ellipse",{"cx":"12","cy":"6","rx":"7","ry":"3"}],["path",{"d":"M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"}]],"send":[["path",{"d":"M7 17L17 7M9 7h8v8"}]],"wallet":[["rect",{"x":"3","y":"6","width":"18","height":"13","rx":"3"}],["path",{"d":"M3 10h18M16 14.5h2"}]],"repay":[["path",{"d":"M17 7L7 17M15 17H7V9"}]],"percent":[["path",{"d":"M19 5L5 19"}],["circle",{"cx":"7","cy":"7","r":"2.5"}],["circle",{"cx":"17","cy":"17","r":"2.5"}]],"alert":[["path",{"d":"M12 4l9 16H3z"}],["path",{"d":"M12 10v4M12 17.5v.5"}]],"pulse":[["path",{"d":"M3 12h4l3-8 4 16 3-8h4"}]],"gauge":[["circle",{"cx":"12","cy":"12","r":"9"}],["path",{"d":"M12 12V3M12 12l6.4 6.4"}]],"calendar":[["rect",{"x":"3","y":"5","width":"18","height":"16","rx":"3"}],["path",{"d":"M3 10h18M8 3v4M16 3v4M9 15l2 2 4-4"}]],"check":[["circle",{"cx":"12","cy":"12","r":"9"}],["path",{"d":"M8 12.5l3 3 5-6"}]],"lock":[["rect",{"x":"5","y":"11","width":"14","height":"10","rx":"2"}],["path",{"d":"M8 11V8a4 4 0 018 0v3"}]],"plus":[["circle",{"cx":"12","cy":"12","r":"9"}],["path",{"d":"M12 8v8M8 12h8"}]],"down":[["path",{"d":"M3 7l6 6 4-4 8 8M21 11v6h-6"}]],"star":[["path",{"d":"M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"}]]};
+// Ikon tiap indikator Analisa; dipakai bersama oleh tampilan layar dan gambar unduhan agar selalu sama.
+const KB_METRIC_ICON = { member: 'users', outstanding: 'coins', disbursement: 'send', saving: 'wallet', repayment: 'repay', margin: 'percent' };
 function kbIcon(name) {
   const shapes = KB_ICONS[name];
   if (!shapes) return null;
@@ -3164,7 +3276,7 @@ function paintKabarBerita() {
     : !m.anReady ? kbMessage('Data Analisa Cabang belum tersedia. Unggah file Analisa melalui menu Unggah Excel agar perkembangan cabang dapat ditampilkan.')
       : h('div', { class: 'kb-grid' }, ['member', 'outstanding', 'disbursement', 'saving', 'repayment', 'margin'].map(key => {
         const mt = m.metricOf(key), money = mt.kind === 'money';
-        const icon = { member: 'users', outstanding: 'coins', disbursement: 'send', saving: 'wallet', repayment: 'repay', margin: 'percent' }[key];
+        const icon = KB_METRIC_ICON[key];
         return kbChangeCard(mt.label, m.anValue(key), m.anDelta(key, true), money, money ? rp(m.an.current[key] || 0) : null, icon);
       }));
 
