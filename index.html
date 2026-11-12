@@ -498,6 +498,25 @@
         <p class="sync">Nilai saat ini: <b id="rb-setting-current">Belum diatur</b></p>
         <p id="rb-setting-msg" class="note" role="status"></p>
       </form>
+
+      <form class="setbox" id="pola-form" novalidate>
+        <h2>Pola Hitung</h2>
+        <p><b>Pengaturan Hitung untuk Disbursement, Repayment dan Margin</b> pada Kabar Berita (kartu baris bawah, "Achv."). Berlaku untuk semua pengguna.</p>
+        <fieldset class="wjlist" id="pola-list">
+          <legend class="sr-only">Pola hitung Disbursement, Repayment dan Margin</legend>
+          <label class="chk">
+            <input type="radio" name="pola" value="A">
+            <span><b>A. Mencari Jarak <em>(Default)</em></b><small>Menampilkan selisih nilai tanggal terbaru terhadap tanggal terakhir akhir bulan sebelumnya, lengkap dengan persentase perubahannya. Bisa bernilai plus atau minus.</small></span>
+          </label>
+          <label class="chk">
+            <input type="radio" name="pola" value="B">
+            <span><b>B. Mencari Capaian</b><small>Menampilkan persentase capaian: nilai tanggal terbaru ÷ nilai tanggal terakhir akhir bulan sebelumnya × 100%. Bisa lebih dari 100% jika melampaui bulan sebelumnya, dan tidak pernah bernilai minus. Kartu menampilkan nilai bulan sebelumnya sebagai pembanding.</small></span>
+          </label>
+        </fieldset>
+        <div class="setrow"><button class="btn fit" id="pola-save" type="submit" disabled>Simpan</button></div>
+        <p class="sync">Saat ini memakai: <b id="pola-cur">Memuat…</b></p>
+        <p id="pola-msg" class="note" role="status"></p>
+      </form>
       </section>
 
       <section id="set-enable-download" class="set-page" hidden>

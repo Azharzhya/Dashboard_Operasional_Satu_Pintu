@@ -275,7 +275,7 @@ const state = {
   imageDownloadLevels: [], imageDownloadConfigLoaded: false, imageDownloadDirty: false, settingPage: 'global',
   data: null, byCat: {}, branches: new Map(), groups: {}, clientIdCounts: new Map(),
   cat: 'a', q: '', branch: '', staf: '', sort: { label: '', dir: 1 }, page: 0, size: 50, view: [],
-  sumBy: 'branch', sumSort: { key: 'n', dir: -1 }, sumQ: '', wjDirty: false,
+  sumBy: 'branch', sumSort: { key: 'n', dir: -1 }, sumQ: '', wjDirty: false, pola: '', polaDirty: false, polaLoading: false,
   wilayah: null, wilayahSelected: '', wilayahDraft: [], wilayahDrafts: Object.create(null), wilayahLoading: false, wilayahLoadedAt: 0,
   rekening: null, rekeningLoading: false, rekeningLoadedAt: 0, dashboardPage: 'sum',
   progress: null, progressLoading: false, progressLoadedAt: 0, progressReloadPending: false,
@@ -359,6 +359,7 @@ function selectTab(which, focus) {
     $('p-' + k).hidden = !on;
   });
   if (which === 'dashboard') selectDashboardPage(state.dashboardPage || 'move');
+  if (which === 'set') loadPola();
   if (focus) $('t-' + which).focus();
 }
 
@@ -484,7 +485,7 @@ function startAutoSync() {
 function logout(msg, forceRefresh) {
   stopAutoSync();
   initialPasswordChangeTicket = '';
-  state.loadSeq++; state.loading = false; state.user = null; state.dataVersion = ''; state.sessionToken = ''; state.data = null; state.byCat = {}; state.groups = {}; state.clientIdCounts = new Map(); state.wjDirty = false;
+  state.loadSeq++; state.loading = false; state.user = null; state.dataVersion = ''; state.sessionToken = ''; state.data = null; state.byCat = {}; state.groups = {}; state.clientIdCounts = new Map(); state.wjDirty = false; state.pola = ''; state.polaDirty = false;
   state.imageDownloadLevels = []; state.imageDownloadConfigLoaded = false; state.imageDownloadDirty = false; state.settingPage = 'global';
   session.clear();
   const cacheClear = cache.clear();
@@ -595,7 +596,7 @@ function enterApp(user) {
   state.imageDownloadLevels = []; state.imageDownloadConfigLoaded = false; state.imageDownloadDirty = false; state.settingPage = 'global';
   paintUser(user);
   state.cat = 'a'; state.q = ''; state.branch = ''; state.staf = ''; state.page = 0; state.sort = { label: '', dir: 1 };
-  resetUpload(); setNote('setmsg', ''); setNote('wjmsg', ''); setNote('rb-setting-msg', ''); state.wjDirty = false;
+  resetUpload(); setNote('setmsg', ''); setNote('wjmsg', ''); setNote('rb-setting-msg', ''); setNote('pola-msg', ''); state.wjDirty = false; state.pola = ''; state.polaDirty = false;
   state.rekening = null; state.rekeningLoadedAt = 0;
   state.progress = null; state.progressLoadedAt = 0; state.progressLoading = false; state.progressReloadPending = false;
   state.progressRecap = 'new'; state.progressDetailPage = 1; state.progressDetailSeq++; state.progressDetailResult = null;
@@ -2505,6 +2506,7 @@ async function kbFetchAnalisa(nik) {
   kbGuard(nik); kbSession(r);
   if (!r.ok) throw new Error(r.error || 'Data Analisa Cabang tidak dapat dimuat.');
   state.kb.analisa = { r }; state.kb.analisaAt = Date.now();
+  if (r.polaHitung) { state.pola = r.polaHitung === 'B' ? 'B' : 'A'; if (!state.polaDirty) paintPola(); }
 }
 async function kbFetchProgress(nik, branch) {
   const r = await api('webProgresHarian', { token: (session.get() || {}).token, branch: branch || '', monthKey: '', progressDate: '', coordinatorNik: '' }, { retry: true });
@@ -2767,7 +2769,7 @@ const RN_LABEL_FONT = '700 21px Arial, sans-serif';
 const RN_PADX = 24, RN_ICON = 52;
 // Tinggi kartu (satu sumber untuk penggambaran dan perhitungan tata letak). lines = jumlah baris label (1-2).
 const rnMetricH = lines => 170 + (lines - 1) * 26;
-const rnChangeH = (lines, hasCompare) => (hasCompare ? 238 : 206) + (lines - 1) * 26;
+const rnChangeH = (lines, hasCompare, bar) => (hasCompare ? 238 : 206) + (lines - 1) * 26 + (bar ? 28 : 0);
 const rnCatH = lines => 288 + (lines - 1) * 26;
 
 function regionalNewsRoundPath(ctx, x, y, w, h, r) {
@@ -2852,19 +2854,35 @@ function regionalNewsMetricCard(ctx, x, y, w, tone, icon, label, value, detail, 
   return h;
 }
 // Kartu perubahan: nilai terbaru + kapsul (segitiga naik/turun, persentase, nilai perubahan).
-function regionalNewsChangeCard(ctx, x, y, w, label, valueText, info, money, icon, lines, word) {
-  const tone = info.has && info.good !== null ? (info.good ? 'good' : 'bad') : '';
-  const h = rnChangeH(lines, info.has);
+function regionalNewsChangeCard(ctx, x, y, w, label, valueText, info, money, icon, lines, word, achv) {
+  const has = achv ? achv.has : info.has;
+  const tone = achv ? (achv.has && !achv.na && achv.reached ? 'good' : '') : (info.has && info.good !== null ? (info.good ? 'good' : 'bad') : '');
+  const h = rnChangeH(lines, has, !!achv && achv.has);
   regionalNewsToneCard(ctx, x, y, w, h, tone, icon);
   regionalNewsCardHead(ctx, x, y, w, label, lines);
   const vy = y + 40 + (lines - 1) * 26 + 66, cy = vy + 22, cx = x + RN_PADX;
   regionalNewsSingleLine(ctx, valueText, cx, vy, w - RN_PADX * 2, 56, 34, '700', '#FFFFFF');
-  if (!info.has) {
+  if (!has) {
     const text = 'Belum ada periode pembanding';
     ctx.font = '600 21px Arial, sans-serif';
     const cw = Math.min(w - RN_PADX * 2, ctx.measureText(text).width + 36);
     imgRoundRect(ctx, cx, cy, cw, 52, 16, 'rgba(255,255,255,0.16)', 'rgba(255,255,255,0.24)');
     regionalNewsSingleLine(ctx, text, cx + 18, cy + 33, cw - 36, 21, 16, '600', 'rgba(255,255,255,0.92)');
+    return h;
+  }
+  if (achv) {   // Pola Hitung B: persentase capaian + nilai bulan pembanding + bilah capaian
+    const pctA = achv.na ? 'N/A (dasar 0)' : nf1.format(achv.pct) + '%', diffA = 'Achv. ' + achv.prevLabel + ': ' + achv.prevText;
+    ctx.font = '700 32px Arial, sans-serif'; const pwA = ctx.measureText(pctA).width;
+    ctx.font = '600 21px Arial, sans-serif'; const dwA = ctx.measureText(diffA).width;
+    const cwA = Math.min(w - RN_PADX * 2, Math.max(pwA, dwA) + 36);
+    imgRoundRect(ctx, cx, cy, cwA, 84, 16, 'rgba(255,255,255,0.16)', 'rgba(255,255,255,0.24)');
+    regionalNewsSingleLine(ctx, pctA, cx + 18, cy + 40, cwA - 36, 32, 22, '700', '#FFFFFF');
+    regionalNewsSingleLine(ctx, diffA, cx + 18, cy + 70, cwA - 36, 21, 16, '600', 'rgba(255,255,255,0.94)');
+    if (!achv.na) {
+      const bw = w - RN_PADX * 2, by = cy + 84 + 14;
+      imgRoundRect(ctx, cx, by, bw, 12, 6, 'rgba(255,255,255,0.24)');
+      imgRoundRect(ctx, cx, by, Math.max(12, bw * Math.min(1, achv.pct / 100)), 12, 6, '#FFFFFF');
+    }
     return h;
   }
   const pctText = info.pct == null ? 'N/A (dasar 0)' : (info.pct > 0 ? '+' : info.pct < 0 ? '−' : '') + nf1.format(Math.abs(info.pct)) + '%';
@@ -2970,6 +2988,16 @@ function regionalNewsModel() {
   const anLabel = an.period
     ? analisaLabelDate(an.period) + (an.comparePeriod ? ' dibanding ' + (an.comparePrevMonth ? 'akhir bulan lalu, ' : '') + analisaLabelDate(an.comparePeriod) : '')
     : 'Belum ada periode analisa';
+  // Pola Hitung (Setting): A = selisih (default), B = persentase capaian terhadap tanggal pembanding.
+  const pola = kb.analisa && kb.analisa.r.polaHitung === 'B' ? 'B' : 'A';
+  const anAchv = key => {
+    if (!an.compare || !an.comparePeriod) return { has: false };
+    const m = metricOf(key), base = Number(an.compare[key]) || 0, cur = Number(an.current[key]) || 0, money = m.kind === 'money';
+    const prevLabel = MONTHS_ID[Number(an.comparePeriod.slice(5, 7)) - 1] + ' ' + an.comparePeriod.slice(2, 4), prevText = money ? rpShort(base) : fmt(base);
+    if (!(base > 0)) return { has: true, na: true, prevLabel, prevText, money };
+    const pct = Math.max(0, cur / base * 100);   // tidak pernah minus; bisa lebih dari 100%
+    return { has: true, na: false, pct, reached: pct >= 100, prevLabel, prevText, money };
+  };
   const sum = (rows, fn) => rows.reduce((s, r) => s + (Number(fn(r)) || 0), 0);
   const d = kb.tool ? kb.tool.d : {}, wajib = String(d.wajib || '');
   const toolRows = kb.tool ? d.rows.filter(r => keepBranch(r[F.BRANCH])) : [];
@@ -3001,7 +3029,7 @@ function regionalNewsModel() {
     : net < 0 ? 'PAR Selesai ' + rpShort(doneBalance) + ' lebih tinggi ' + rpShort(Math.abs(net)) + ' dari PAR Baru ' + rpShort(newBalance) + '.'
       : 'PAR Baru dan PAR Selesai seimbang pada ' + rpShort(newBalance) + '.');
   return {
-    rb, rbRows, rbTotal, rbActive, rbPct, rbReady, an, anReady, anDelta, metricOf, anValue, anLabel, sum, catRows, rowsA, rows1, rowsS, angKali, angNominal, d, ph, pt, red, newBalance, doneBalance, newCount, doneCount, daily, lastDate, recent, dd, khusus, khCount, khBalance, lead, branch, rbAsOfLabel, rbSinceLabel,
+    rb, rbRows, rbTotal, rbActive, rbPct, rbReady, an, anReady, anDelta, metricOf, anValue, anLabel, sum, catRows, rowsA, rows1, rowsS, angKali, angNominal, d, ph, pt, red, newBalance, doneBalance, newCount, doneCount, daily, lastDate, recent, dd, khusus, khCount, khBalance, lead, branch, rbAsOfLabel, rbSinceLabel, pola, anAchv,
     loaded: { rekening: !!kb.rekening, analisa: !!kb.analisa, tool: !!kb.tool, progress: !!phEntry }
   };
 }
@@ -3018,7 +3046,7 @@ function imgBuildRegionalNews() {
   ctx.fillStyle = '#EEF4F0'; ctx.fillRect(0, 0, W, REGIONAL_NEWS_MAX_H);
 
   const {
-    rb, rbRows, rbTotal, rbActive, rbPct, rbReady, an, anReady, anDelta, metricOf, anValue, anLabel, sum, catRows, rowsA, rows1, rowsS, angKali, angNominal, d, ph, pt, red, newBalance, doneBalance, newCount, doneCount, daily, lastDate, recent, dd, khusus, khCount, khBalance, lead, branch, rbAsOfLabel, rbSinceLabel
+    rb, rbRows, rbTotal, rbActive, rbPct, rbReady, an, anReady, anDelta, metricOf, anValue, anLabel, sum, catRows, rowsA, rows1, rowsS, angKali, angNominal, d, ph, pt, red, newBalance, doneBalance, newCount, doneCount, daily, lastDate, recent, dd, khusus, khCount, khBalance, lead, branch, rbAsOfLabel, rbSinceLabel, pola, anAchv
   } = regionalNewsModel();
   const hasCmp = !!an.compare;
   const wrapH = (text, width, font, lh, maxLines) => { ctx.font = font; return Math.min(maxLines, Math.max(1, regionalNewsLines(ctx, text, width).length)) * lh; };
@@ -3077,16 +3105,18 @@ function imgBuildRegionalNews() {
   // ---- 1. Perkembangan Cabang
   const keys1 = [...KB_DEV_KEYS, ...KB_ACHV_KEYS];
   const l1 = regionalNewsLabelLines(ctx, keys1.map(k => metricOf(k).label), col3);
-  const note1 = 'Dev. = Deviation (Perubahan) · Achv. = Achievements (Capaian), dihitung terhadap tanggal pembanding.';
+  const note1 = kbLegendNote(pola);
   const n1 = wrapH(note1, INNER, '400 19px Arial, sans-serif', 28, 2);
-  const chH1 = rnChangeH(l1, hasCmp), c1 = anReady ? chH1 * 2 + GAP + 18 + n1 + 4 : 130;
+  const chH1 = rnChangeH(l1, hasCmp, false), chH2 = rnChangeH(l1, hasCmp, pola === 'B' && hasCmp);   // baris bawah menyediakan ruang bilah capaian
+  const c1 = anReady ? chH1 + GAP + chH2 + 18 + n1 + 4 : 130;
   let p = regionalNewsPanel(ctx, y, 170 + c1, 1, 'Perkembangan Cabang', 'Analisa Cabang · ' + anLabel, '#0A7A5A');
   if (anReady) {
     keys1.forEach((key, i) => {
       const m = metricOf(key), col = i % 3, row = Math.floor(i / 3);
-      regionalNewsChangeCard(ctx, p.x + col * (col3 + GAP), p.y + row * (chH1 + GAP), col3, m.label, anValue(key), anDelta(key, true), m.kind === 'money', KB_METRIC_ICON[key], l1, KB_DEV_KEYS.includes(key) ? 'Dev.' : 'Achv.');
+      regionalNewsChangeCard(ctx, p.x + col * (col3 + GAP), p.y + (row ? chH1 + GAP : 0), col3, m.label, anValue(key), anDelta(key, true), m.kind === 'money', KB_METRIC_ICON[key], l1,
+        KB_DEV_KEYS.includes(key) ? 'Dev.' : 'Achv.', pola === 'B' && KB_ACHV_KEYS.includes(key) ? anAchv(key) : null);
     });
-    regionalNewsText(ctx, note1, p.x, p.y + chH1 * 2 + GAP + 18 + 20, INNER, '400 19px Arial, sans-serif', '#728178', 2, 28);
+    regionalNewsText(ctx, note1, p.x, p.y + chH1 + GAP + chH2 + 18 + 20, INNER, '400 19px Arial, sans-serif', '#728178', 2, 28);
   } else {
     regionalNewsText(ctx, 'Data Analisa Cabang belum tersedia. Unggah file Analisa melalui menu Unggah Excel agar perkembangan cabang dapat ditampilkan.',
       p.x, p.y + 40, p.width, '400 30px Arial, sans-serif', '#53665D', 3, 38);
@@ -3193,6 +3223,10 @@ const KB_ICONS = {
   "megaphone":[["path",{"d":"M3 10v4h3l6 4V6L6 10H3z"}],["path",{"d":"M15.5 9a4 4 0 010 6"}],["path",{"d":"M18.5 6a8 8 0 010 12"}]],
   "users":[["circle",{"cx":"9","cy":"8","r":"3"}],["path",{"d":"M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"}],["circle",{"cx":"17","cy":"9","r":"2.5"}],["path",{"d":"M16.2 14.2c2.7.4 4.8 2.7 4.8 5.8"}]],"coins":[["ellipse",{"cx":"12","cy":"6","rx":"7","ry":"3"}],["path",{"d":"M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"}]],"send":[["path",{"d":"M7 17L17 7M9 7h8v8"}]],"wallet":[["rect",{"x":"3","y":"6","width":"18","height":"13","rx":"3"}],["path",{"d":"M3 10h18M16 14.5h2"}]],"repay":[["path",{"d":"M17 7L7 17M15 17H7V9"}]],"percent":[["path",{"d":"M19 5L5 19"}],["circle",{"cx":"7","cy":"7","r":"2.5"}],["circle",{"cx":"17","cy":"17","r":"2.5"}]],"alert":[["path",{"d":"M12 4l9 16H3z"}],["path",{"d":"M12 10v4M12 17.5v.5"}]],"pulse":[["path",{"d":"M3 12h4l3-8 4 16 3-8h4"}]],"gauge":[["circle",{"cx":"12","cy":"12","r":"9"}],["path",{"d":"M12 12V3M12 12l6.4 6.4"}]],"calendar":[["rect",{"x":"3","y":"5","width":"18","height":"16","rx":"3"}],["path",{"d":"M3 10h18M8 3v4M16 3v4M9 15l2 2 4-4"}]],"check":[["circle",{"cx":"12","cy":"12","r":"9"}],["path",{"d":"M8 12.5l3 3 5-6"}]],"lock":[["rect",{"x":"5","y":"11","width":"14","height":"10","rx":"2"}],["path",{"d":"M8 11V8a4 4 0 018 0v3"}]],"plus":[["circle",{"cx":"12","cy":"12","r":"9"}],["path",{"d":"M12 8v8M8 12h8"}]],"down":[["path",{"d":"M3 7l6 6 4-4 8 8M21 11v6h-6"}]],"star":[["path",{"d":"M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"}]]};
 // Ikon tiap indikator Analisa; dipakai bersama oleh tampilan layar dan gambar unduhan agar selalu sama.
+// Keterangan singkatan di bawah kartu Perkembangan Cabang (sama untuk layar dan gambar).
+const kbLegendNote = pola => pola === 'B'
+  ? 'Dev. = Deviation (Perubahan) · Achv. = Achievements (Capaian): nilai tanggal terbaru ÷ nilai akhir bulan sebelumnya × 100%.'
+  : 'Dev. = Deviation (Perubahan) · Achv. = Achievements (Capaian), dihitung terhadap tanggal pembanding.';
 // Baris atas Perkembangan Cabang memakai "Dev." (Deviation/Perubahan); baris bawah "Achv." (Achievements/Capaian).
 const KB_DEV_KEYS = ['member', 'outstanding', 'saving'], KB_ACHV_KEYS = ['disbursement', 'repayment', 'margin'];
 const KB_METRIC_ICON = { member: 'users', outstanding: 'coins', disbursement: 'send', saving: 'wallet', repayment: 'repay', margin: 'percent' };
@@ -3215,13 +3249,21 @@ function kbDeltaView(info, money, word) {
     h('span', { class: 'kb-pct', text: pct }),
     h('span', { class: 'kb-diff', text: (word || 'Dev.') + ' ' + regionalNewsSigned(money, info.delta) }));
 }
-function kbChangeCard(label, valueText, info, money, fullValue, icon, word) {
-  const tone = info.has && info.good !== null ? (info.good ? 'good' : 'bad') : '';
+// Isi kartu Pola Hitung B: persentase capaian, nilai bulan pembanding, dan bilah capaian (tidak ada warna merah).
+function kbAchvView(a) {
+  if (!a.has) return h('div', { class: 'kb-delta neutral' }, h('span', { class: 'kb-diff', text: 'Belum ada periode pembanding' }));
+  const pct = a.na ? 'N/A (dasar 0)' : nf1.format(a.pct) + '%';
+  return h('div', { class: 'kb-achv-wrap' },
+    h('div', { class: 'kb-delta achv' }, h('span', { class: 'kb-pct', text: pct }), h('span', { class: 'kb-diff', text: 'Achv. ' + a.prevLabel + ': ' + a.prevText })),
+    a.na ? null : h('div', { class: 'kb-achv-bar', role: 'img', 'aria-label': 'Capaian ' + pct }, h('i', { style: 'width:' + Math.min(100, a.pct).toFixed(1) + '%' })));
+}
+function kbChangeCard(label, valueText, info, money, fullValue, icon, word, achv) {
+  const tone = achv ? (achv.has && !achv.na && achv.reached ? 'good' : '') : (info.has && info.good !== null ? (info.good ? 'good' : 'bad') : '');
   return h('article', { class: 'kb-card' + (tone ? ' tone-' + tone : '') },
     kbIcon(icon),
     h('span', { class: 'kb-label', text: label }),
     h('strong', { class: 'kb-value', text: valueText, title: fullValue || null }),
-    kbDeltaView(info, money, word));
+    achv ? kbAchvView(achv) : kbDeltaView(info, money, word));
 }
 function kbMetricCard(label, valueText, note, tone, icon) {
   return h('article', { class: 'kb-card' + (tone ? ' tone-' + tone : '') },
@@ -3295,9 +3337,10 @@ function paintKabarBerita() {
       : h('div', null,
         h('div', { class: 'kb-grid' }, [...KB_DEV_KEYS, ...KB_ACHV_KEYS].map(key => {
           const mt = m.metricOf(key), money = mt.kind === 'money';
-          return kbChangeCard(mt.label, m.anValue(key), m.anDelta(key, true), money, money ? rp(m.an.current[key] || 0) : null, KB_METRIC_ICON[key], KB_DEV_KEYS.includes(key) ? 'Dev.' : 'Achv.');
+          return kbChangeCard(mt.label, m.anValue(key), m.anDelta(key, true), money, money ? rp(m.an.current[key] || 0) : null, KB_METRIC_ICON[key], KB_DEV_KEYS.includes(key) ? 'Dev.' : 'Achv.',
+            m.pola === 'B' && KB_ACHV_KEYS.includes(key) ? m.anAchv(key) : null);
         })),
-        h('p', { class: 'kb-foot', text: 'Dev. = Deviation (Perubahan) · Achv. = Achievements (Capaian), dihitung terhadap tanggal pembanding.' }));
+        h('p', { class: 'kb-foot', text: kbLegendNote(m.pola) }));
 
   // 2. Kondisi Permasalahan Cabang
   const rbBlock = !L.rekening ? kbWait('Rekening Bergerak', 3)
@@ -4706,6 +4749,47 @@ async function saveWajib() {
 }
 
 /* ---------------------------------------------------------------------
+   Setting: Pola Hitung (ADMINISTRATOR dan USER 0; server memeriksa ulang)
+   A = Mencari Jarak (default), B = Mencari Capaian. Berlaku untuk Disbursement, Repayment, dan Margin di Kabar Berita.
+   --------------------------------------------------------------------- */
+const POLA_LABEL = { A: 'A. Mencari Jarak', B: 'B. Mencari Capaian' };
+const polaSelected = () => { const el = document.querySelector('#pola-list input:checked'); return el ? el.value : ''; };
+function syncPolaForm() {   // tombol Simpan aktif hanya bila pilihan berbeda dari yang tersimpan
+  $('pola-save').disabled = !state.pola || !polaSelected() || polaSelected() === state.pola;
+}
+function paintPola() {
+  const cur = state.pola;
+  $('pola-cur').textContent = cur ? POLA_LABEL[cur] + (cur === 'A' ? ' (Default)' : '') : 'Memuat…';
+  if (cur && !state.polaDirty) document.querySelectorAll('#pola-list input').forEach(i => { i.checked = i.value === cur; });   // jangan menimpa pilihan yang sedang diubah
+  syncPolaForm();
+}
+async function loadPola() {
+  if (state.polaLoading || !state.user) return;
+  state.polaLoading = true;
+  try {
+    const r = await api('webGetPolaHitung', { token: (session.get() || {}).token }, { retry: true });
+    if (r.code === 'SESSION_REQUIRED') return logout(r.error);
+    if (r.ok) { state.pola = r.pola === 'B' ? 'B' : 'A'; paintPola(); }
+  } finally { state.polaLoading = false; }
+}
+async function savePola() {
+  const value = polaSelected();
+  if (!value || value === state.pola) return setNote('pola-msg', 'Tidak ada perubahan.');
+  const ok = await askConfirm('Simpan Pola Hitung?', (value === 'B'
+    ? 'Disbursement, Repayment dan Margin pada Kabar Berita akan menampilkan persentase capaian terhadap akhir bulan sebelumnya.'
+    : 'Disbursement, Repayment dan Margin pada Kabar Berita akan menampilkan selisih terhadap akhir bulan sebelumnya.') + ' Pengaturan ini berlaku untuk semua pengguna.', 'Simpan');
+  if (!ok) return;
+  $('pola-save').disabled = true; setNote('pola-msg', 'Menyimpan…');
+  const r = await api('webSetPolaHitung', { token: (session.get() || {}).token, value });
+  if (r.code === 'SESSION_REQUIRED') return logout(r.error);
+  if (!r.ok) { syncPolaForm(); return setNote('pola-msg', r.error || 'Gagal menyimpan.', 'bad'); }
+  state.pola = r.pola === 'B' ? 'B' : 'A'; state.polaDirty = false;
+  if (state.kb.analisa) state.kb.analisa.r.polaHitung = state.pola;   // langsung dipakai Kabar Berita (layar dan gambar unduhan)
+  paintPola(); paintKabarBerita();
+  setNote('pola-msg', 'Tersimpan: Pola Hitung ' + POLA_LABEL[state.pola] + '.', 'good');
+}
+
+/* ---------------------------------------------------------------------
    Setting: Wilayah Kerja (ADMINISTRATOR dan USER 0; akses server diperiksa ulang)
    --------------------------------------------------------------------- */
 function setSettingPage(which) {
@@ -4999,6 +5083,8 @@ function bind() {
   buildWajibForm();
   buildImageDownloadForm();
   $('wjform').addEventListener('submit', e => { e.preventDefault(); saveWajib(); });
+  $('pola-form').addEventListener('submit', e => { e.preventDefault(); savePola(); });
+  $('pola-list').addEventListener('change', () => { state.polaDirty = !!state.pola && polaSelected() !== state.pola; setNote('pola-msg', ''); syncPolaForm(); });
   $('image-download-form').addEventListener('submit', e => { e.preventDefault(); saveImageDownloadAccess(); });
   $('image-download-level-list').addEventListener('change', () => {
     state.imageDownloadDirty = imageDownloadChecked().join('|') !== (state.imageDownloadLevels || []).join('|');
