@@ -101,6 +101,18 @@
       <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
       <span class="tab-text">Dashboard</span>
     </button>
+    <button class="tab" role="tab" id="t-ewo" aria-controls="p-ewo" aria-selected="false" tabindex="-1" type="button" aria-label="Eksekusi Writte Off">
+      <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span>
+      <span class="tab-text"><span class="tab-long">Eksekusi Writte Off</span><span class="tab-short" aria-hidden="true">Eksekusi WO</span></span>
+    </button>
+    <button class="tab" role="tab" id="t-awo" aria-controls="p-awo" aria-selected="false" tabindex="-1" type="button" aria-label="Approve Writte Off">
+      <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 4.5 3.2 7.8 8 9 4.8-1.2 8-4.5 8-9V6z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg></span>
+      <span class="tab-text"><span class="tab-long">Approve Writte Off</span><span class="tab-short" aria-hidden="true">Approve WO</span></span>
+    </button>
+    <button class="tab" role="tab" id="t-rwo" aria-controls="p-rwo" aria-selected="false" tabindex="-1" type="button" aria-label="Report Writte Off">
+      <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 3h10l4 4v14H5z"/><path d="M15 3v4h4M8.5 17v-3M12 17v-6M15.5 17v-4"/></svg></span>
+      <span class="tab-text"><span class="tab-long">Report Writte Off</span><span class="tab-short" aria-hidden="true">Report WO</span></span>
+    </button>
     <button class="tab" role="tab" id="t-set" aria-controls="p-set" aria-selected="false" tabindex="-1" type="button" hidden>
       <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3m4 0h9M13 4v6M7 14v6"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></span>
       <span class="tab-text">Setting</span>
@@ -108,6 +120,10 @@
     <button class="tab" role="tab" id="t-up" aria-controls="p-up" aria-selected="false" tabindex="-1" type="button" hidden>
       <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V4m-4 4 4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg></span>
       <span class="tab-text">Unggah Excel</span>
+    </button>
+    <button class="tab" role="tab" id="t-mgmt" aria-controls="p-mgmt" aria-selected="false" tabindex="-1" type="button" hidden>
+      <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span>
+      <span class="tab-text">Manajemen</span>
     </button>
     <button class="tab" role="tab" id="t-versions" aria-controls="p-versions" aria-selected="false" tabindex="-1" type="button">
       <span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 8v4l2.5 2.5M20.2 12a8.2 8.2 0 1 1-2.4-5.8L20 8.5"/><path d="M20 4v4.5h-4.5"/></svg></span>
@@ -456,6 +472,127 @@
       </div>
     </div>
 
+    <!-- Eksekusi Writte Off: filter -> Proses Data (ID_EWO) -> area kerja -> Eksekusi Data -->
+    <div id="p-ewo" role="tabpanel" aria-labelledby="t-ewo" hidden>
+      <div class="dhead page-heading">
+        <div>
+          <div class="eyebrow"><span class="eyebrow-dot"></span> WRITE OFF</div>
+          <h1 class="ph">Eksekusi Writte Off</h1>
+          <p class="lead" id="ewo-meta">Pilih cabang, jenis, dan tahun WO, lalu proses data untuk membuat ID_EWO.</p>
+        </div>
+        <div class="dact"><button class="btn ghost" id="ewo-refresh" type="button"><span class="btn-icon" aria-hidden="true">↻</span><span class="btn-label">Muat ulang</span></button></div>
+      </div>
+
+      <section class="wo-panel" aria-labelledby="ewo-a-title">
+        <div class="wo-panel-head"><div><span class="wo-step">TAHAP A</span><h2 id="ewo-a-title">Filter &amp; Proses Data</h2></div></div>
+        <div class="wo-filter">
+          <div class="wo-field"><label for="ewo-branch">Nama Cabang</label><select id="ewo-branch"></select></div>
+          <div class="wo-field"><label for="ewo-jenis">Jenis WO</label><select id="ewo-jenis"></select></div>
+          <div class="wo-field"><label for="ewo-tahun">Tahun WO</label><select id="ewo-tahun"></select></div>
+          <div class="wo-field wo-go"><button class="btn fit" id="ewo-proses" type="button" disabled>Proses Data</button></div>
+        </div>
+        <p id="ewo-note" class="note" role="status"></p>
+      </section>
+
+      <section class="wo-panel" id="ewo-hist-panel" aria-labelledby="ewo-h-title" hidden>
+        <div class="wo-panel-head"><div><h2 id="ewo-h-title">Daftar ID_EWO</h2><p>Buka kembali ID_EWO untuk melanjutkan atau melihat datanya.</p></div></div>
+        <div class="tw wo-tw"><table id="ewo-hist"></table></div>
+      </section>
+
+      <section class="wo-panel" id="ewo-work" aria-labelledby="ewo-b-title" hidden>
+        <div class="wo-panel-head">
+          <div>
+            <span class="wo-step">TAHAP B</span>
+            <h2 id="ewo-b-title">Area Kerja <span class="chip" id="ewo-id"></span> <span class="wo-status" id="ewo-status"></span></h2>
+            <p id="ewo-work-meta"></p>
+          </div>
+          <div class="wo-actions">
+            <button class="btn ghost" id="ewo-download" type="button">Unduh</button>
+            <button class="btn ghost" id="ewo-close" type="button">Tutup</button>
+          </div>
+        </div>
+        <div class="wo-banner" id="ewo-banner" role="status" hidden></div>
+        <div class="stats" id="ewo-stats"></div>
+        <div class="wo-toolbar">
+          <label class="version-search" for="ewo-q"><span aria-hidden="true">⌕</span><input id="ewo-q" type="search" placeholder="Cari Ctr ID, Client ID, nama, atau Loan No…" autocomplete="off"></label>
+        </div>
+        <div class="tw tall wo-tw"><table id="ewo-tbl"></table></div>
+        <div class="wo-pager" id="ewo-pager"></div>
+        <div class="wo-final" id="ewo-final">
+          <div><span class="wo-step">TAHAP C</span><h3>Finalisasi Eksekusi</h3><p id="ewo-final-note"></p></div>
+          <button class="btn fit" id="ewo-exec" type="button">Eksekusi Data</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- Approve Writte Off: ID_EWO berstatus "Approve Writte Off" -> Input JV, Verifikasi Nilai WO -->
+    <div id="p-awo" role="tabpanel" aria-labelledby="t-awo" hidden>
+      <div class="dhead page-heading">
+        <div>
+          <div class="eyebrow"><span class="eyebrow-dot"></span> WRITE OFF</div>
+          <h1 class="ph">Approve Writte Off</h1>
+          <p class="lead" id="awo-meta">Daftar ID_EWO berstatus “Approve Writte Off” pada cabang yang sudah melakukan input WO.</p>
+        </div>
+        <div class="dact"><button class="btn ghost" id="awo-refresh" type="button"><span class="btn-icon" aria-hidden="true">↻</span><span class="btn-label">Muat ulang</span></button></div>
+      </div>
+      <section class="wo-panel" aria-label="Daftar ID_EWO">
+        <div class="wo-toolbar wo-afilter">
+          <div class="wo-field"><label for="awo-jenis">Jenis WO</label>
+            <select id="awo-jenis"><option value="">Semua (Reguler &amp; Khusus)</option><option value="R">WO Reguler</option><option value="K">WO Khusus</option></select></div>
+        </div>
+        <div class="tw wo-tw"><table id="awo-tbl"></table></div>
+        <p id="awo-note" class="note" role="status"></p>
+      </section>
+    </div>
+
+    <!-- Report Writte Off: seluruh data WO (termasuk Batal) + unduhan WO Sesuai Reguler / Khusus -->
+    <div id="p-rwo" role="tabpanel" aria-labelledby="t-rwo" hidden>
+      <div class="dhead page-heading">
+        <div>
+          <div class="eyebrow"><span class="eyebrow-dot"></span> WRITE OFF</div>
+          <h1 class="ph">Report Writte Off</h1>
+          <p class="lead" id="rwo-meta">Seluruh data WO Reguler dan Khusus pada cabang Anda, termasuk yang dibatalkan, lengkap dengan No. THC, No. TAK, dan No. JV.</p>
+        </div>
+        <div class="dact"><button class="btn ghost" id="rwo-refresh" type="button"><span class="btn-icon" aria-hidden="true">↻</span><span class="btn-label">Muat ulang</span></button></div>
+      </div>
+      <section class="wo-panel" id="rsb-panel" aria-label="Surat Berita Acara">
+        <div class="wo-panel-head"><div><h2>Surat Berita Acara</h2>
+          <p>Unggah TTD MIS Support Administration Staff (MSA) dan Branch Manager (BM) cabang, lalu Generate untuk membuat Surat Berita Acara beserta tanda tangannya. Tombol unduh pada kolom Jenis WO muncul setelah surat digenerate. Hanya cabang dengan ID_EWO yang verifikasinya “Sesuai” yang tampil.</p></div></div>
+        <div class="wo-toolbar">
+          <label class="version-search" for="rsb-q"><span aria-hidden="true">⌕</span><input id="rsb-q" type="search" placeholder="Cari nama cabang…" autocomplete="off"></label>
+          <span class="rsb-count" id="rsb-count"></span>
+        </div>
+        <div class="tw wo-tw" id="rsb-wrap"><table id="rsb-tbl"></table></div>
+        <p id="rsb-note" class="note" role="status"></p>
+      </section>
+      <section class="wo-panel" aria-label="Unduh WO Sesuai">
+        <div class="wo-panel-head"><div><h2>Unduh WO Sesuai</h2>
+          <p>Berisi seluruh data aktif pada ID_EWO yang verifikasinya “Sesuai” (tanpa data yang dibatalkan), beserta No. THC, No. TAK, dan No. JV. Tidak terpengaruh filter di bawah.</p></div></div>
+        <div class="rwo-actions">
+          <button class="btn fit" id="rwo-dl-r" type="button" disabled>Unduh WO Sesuai Reguler</button>
+          <button class="btn fit" id="rwo-dl-k" type="button" disabled>Unduh WO Sesuai Khusus</button>
+        </div>
+      </section>
+      <section class="wo-panel" aria-label="Data WO keseluruhan">
+        <div class="stats" id="rwo-stats"></div>
+        <div class="rwo-filters">
+          <div class="wo-field"><label for="rwo-jenis">Jenis WO</label>
+            <select id="rwo-jenis"><option value="">Semua</option><option value="R">WO Reguler</option><option value="K">WO Khusus</option></select></div>
+          <div class="wo-field"><label for="rwo-status">Status</label>
+            <select id="rwo-status"><option value="">Semua</option><option>Belum Diproses</option><option>Confirm</option><option>Approve Writte Off</option><option>Sesuai</option><option>Batal</option></select></div>
+          <div class="wo-field"><label for="rwo-tahun">Tahun</label><select id="rwo-tahun"><option value="">Semua</option></select></div>
+          <div class="wo-field"><label for="rwo-cabang">Cabang</label><select id="rwo-cabang"><option value="">Semua</option></select></div>
+        </div>
+        <div class="wo-toolbar">
+          <label class="version-search" for="rwo-q"><span aria-hidden="true">⌕</span><input id="rwo-q" type="search" placeholder="Cari ID_EWO, Ctr ID, Client ID, nama, Loan No, No. THC, No. TAK, atau No. JV…" autocomplete="off"></label>
+          <button class="btn ghost" id="rwo-dl-view" type="button" disabled>Unduh Data yang Tampil</button>
+        </div>
+        <div class="tw tall wo-tw"><table id="rwo-tbl"></table></div>
+        <div class="wo-pager" id="rwo-pager"></div>
+        <p id="rwo-note" class="note" role="status"></p>
+      </section>
+    </div>
+
     <!-- Setting (ADMINISTRATOR dan USER 0) -->
     <div id="p-set" role="tabpanel" aria-labelledby="t-set" hidden>
       <h1 class="ph">Setting</h1>
@@ -533,7 +670,7 @@
       <section id="set-wilayah" class="set-page" hidden>
         <div class="wilayah-intro">
           <h2>Wilayah Kerja</h2>
-          <p>Atur cabang yang boleh dilihat setiap akun. Centang cabang pada user terpilih, lalu simpan. Perubahan berlaku pada Dashboard, Ringkasan, dan file Excel yang diunduh dari akun tersebut.</p>
+          <p>Atur cabang yang boleh dilihat setiap akun. Centang cabang pada user terpilih, lalu simpan. Perubahan berlaku pada Dashboard, Ringkasan, dan file Excel yang diunduh dari akun tersebut. Pada menu Write Off, USER 0, USER 1, dan USER 2 mengikuti Wilayah Kerja, sedangkan USER 3 hanya melihat cabang akunnya sendiri (kolom CABANG di Akses_2).</p>
         </div>
         <div class="wilayah-layout">
           <aside class="wilayah-users" aria-label="Daftar user">
@@ -574,6 +711,7 @@
         <span>atau seret file ke sini file .xls or .xlsx</span>
       </label>
       <input id="file" type="file" accept=".xlsx,.xls" hidden>
+      <small class="updiff-note">Pola nama file: <b>PAR [nama opsional] dd-mm-yyyy</b> · <b>Analisa dd-mm-yyyy</b> · <b>WO Reguler yyyy</b> · <b>WO Khusus yyyy</b> (data master Write Off; header di baris 3, data mulai baris 4).</small>
       <section class="refresh-box" aria-label="Segarkan data dashboard">
         <button class="btn ghost fit" id="refresh-all" type="button"><span class="btn-icon" aria-hidden="true">↻</span><span class="btn-label">Segarkan data dashboard</span></button>
         <p id="refresh-msg" class="note" role="status"></p>
@@ -601,6 +739,33 @@
       </div>
     </div>
 
+    <!-- Manajemen (ADMINISTRATOR): show/hide menu dan sub menu per tingkat -->
+    <div id="p-mgmt" role="tabpanel" aria-labelledby="t-mgmt" hidden>
+      <div class="dhead page-heading">
+        <div>
+          <div class="eyebrow"><span class="eyebrow-dot"></span> HAK AKSES MENU</div>
+          <h1 class="ph">Manajemen</h1>
+          <p class="lead">Tentukan menu dan sub menu yang tampil untuk setiap tingkat akun. Halaman ini hanya muncul dan dapat dipakai oleh Administrator.</p>
+        </div>
+        <button class="btn ghost sm" id="mg-refresh" type="button">Muat ulang</button>
+      </div>
+      <section class="mg-card" aria-label="Pengaturan tampil atau sembunyi menu">
+        <p class="mg-help">Aktifkan saklar untuk <b>menampilkan</b> menu pada tingkat itu, matikan untuk <b>menyembunyikannya</b>. Menyembunyikan menu utama ikut menyembunyikan seluruh sub menunya. Administrator selalu melihat semua menu.</p>
+        <div id="mg-wrap" class="mg-wrap" role="region" aria-label="Tabel tampil atau sembunyi menu per tingkat" tabindex="0"></div>
+        <ul class="mg-legend">
+          <li><b>Dikunci</b> = menu itu dibatasi oleh sistem sehingga tidak dapat ditampilkan untuk tingkat tersebut (Setting hanya Administrator dan USER 0; Unggah Excel dan Enable Download khusus Administrator).</li>
+          <li>Pengaturan ini mengatur <b>tampilan menu</b>. Data yang boleh dilihat tetap dibatasi server menurut tingkat dan Wilayah Kerja (menu Write Off: USER 3 hanya cabangnya sendiri).</li>
+        </ul>
+        <div class="mg-actions">
+          <button class="btn fit" id="mg-save" type="button" disabled>Simpan Pengaturan Menu</button>
+          <button class="btn ghost" id="mg-undo" type="button" disabled>Batalkan Perubahan</button>
+          <button class="btn ghost" id="mg-default" type="button" disabled>Kembalikan ke Bawaan</button>
+        </div>
+        <p id="mg-msg" class="note" role="status"></p>
+        <p id="mg-last" class="sync"></p>
+      </section>
+    </div>
+
     <!-- Versi & Changelog: riwayat pembaruan aplikasi -->
     <div id="p-versions" role="tabpanel" aria-labelledby="t-versions" hidden>
       <div class="version-heading page-heading">
@@ -609,17 +774,17 @@
           <h1 class="ph">Versi &amp; Changelog</h1>
           <p class="lead">Catatan fitur, penyempurnaan, dan perbaikan Dashboard Operasional Satu Pintu dari fondasi awal hingga rilis saat ini.</p>
         </div>
-        <span class="version-current"><i></i> Versi saat ini <b>v.20.17</b></span>
+        <span class="version-current"><i></i> Versi saat ini <b>v.20.20</b></span>
       </div>
 
       <section class="version-overview" aria-label="Ringkasan versi saat ini">
         <div class="version-overview-main">
           <span class="version-overview-label">RILIS TERBARU</span>
-          <strong>Dashboard Operasional Satu Pintu v.20.17</strong>
-          <p>Pemeriksaan upload PAR besar kini berjalan bertahap dan dapat dilanjutkan setelah timeout tanpa mengirim ulang staging. Reset database operasional tetap tersedia; pemeriksaan selisih simpanan nonaktif dan Rekening Bergerak tetap khusus Total Balance.</p>
+          <strong>Dashboard Operasional Satu Pintu v.20.20</strong>
+          <p>Menu baru Manajemen (khusus Administrator) mengatur menu dan sub menu yang tampil untuk USER 0 sampai USER 3. Data semua menu Write Off kini mengikuti tingkat akun: USER 3 hanya cabangnya sendiri, USER 0, USER 1, dan USER 2 sesuai Wilayah Kerja.</p>
         </div>
-        <div class="version-overview-stat"><strong>20.17</strong><span>Versi terbaru</span></div>
-        <div class="version-overview-stat"><strong>20 + 2</strong><span>Catatan rilis &amp; fondasi</span></div>
+        <div class="version-overview-stat"><strong>20.20</strong><span>Versi terbaru</span></div>
+        <div class="version-overview-stat"><strong>23 + 2</strong><span>Catatan rilis &amp; fondasi</span></div>
       </section>
 
       <div class="version-toolbar">
@@ -629,7 +794,39 @@
 
       <div id="version-list" class="version-list">
         <details class="version-item" open>
-          <summary><span class="version-marker latest">20.17</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.17</b><small>Pemeriksaan upload bertahap dan pemulihan sesi staging setelah timeout</small></span><span class="version-tag">UPLOAD · ANTI-TIMEOUT</span></summary>
+          <summary><span class="version-marker latest">20.20</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.20</b><small>Menu Manajemen (show/hide menu per tingkat) dan cakupan data Write Off per tingkat</small></span><span class="version-tag">MANAJEMEN · HAK AKSES</span></summary>
+          <div class="version-body"><ul>
+            <li>Menu baru “Manajemen” hanya muncul dan hanya dapat dipakai oleh Administrator (dicek di server). Tabelnya memuat setiap menu dan sub menu (Dashboard: Kabar Berita, Progres Harian, Analisa Cabang, Rekening Bergerak, Tool PAR; Eksekusi, Approve, dan Report Writte Off; Setting: Pengaturan Dashboard, Wilayah Kerja, Enable Download; Unggah Excel; Versi &amp; Changelog) dengan saklar tampil atau sembunyi untuk USER 0, USER 1, USER 2, dan USER 3.</li>
+            <li>Pengaturan disimpan di sheet Menu_Akses (dibuat otomatis saat pertama disimpan, lengkap dengan siapa dan kapan mengubah) sehingga berlaku di semua perangkat. Sidebar akun terkait menyesuaikan saat login dan disegarkan otomatis saat aplikasi aktif, tanpa perlu login ulang. Halaman yang sedang dibuka lalu disembunyikan dialihkan ke menu pertama yang tampil.</li>
+            <li>Menyembunyikan menu utama ikut menyembunyikan seluruh sub menunya; menu utama yang semua sub menunya disembunyikan ikut tersembunyi. Setiap tingkat wajib memiliki minimal satu menu utama yang tampil. Tombol “Kembalikan ke Bawaan” memulihkan tampilan seperti sebelum fitur ini ada.</li>
+            <li>Menu yang memang dibatasi server tetap dikunci: Setting hanya untuk Administrator dan USER 0, sedangkan Unggah Excel dan Enable Download khusus Administrator. Pengaturan ini mengatur tampilan dan tidak melonggarkan hak mengubah data.</li>
+            <li>Cakupan data semua menu Write Off (Eksekusi, Approve, Report, Surat Berita Acara, dan Unduh WO Sesuai) kini mengikuti tingkat: Administrator semua cabang; USER 0, USER 1, dan USER 2 sesuai Wilayah Kerja; USER 3 hanya cabang akunnya sendiri berdasarkan kolom CABANG di Akses_2 (tanpa mengikuti Wilayah Kerja). Penulisan “KOMIDA Cabang Cirebon” dan “CIREBON” dianggap sama. Seluruh pembatasan dijalankan di server.</li>
+            <li>Server: file baru Manajemen.gs (aksi webMenuGet dan webMenuSave), satu blok rute baru di Akses.gs, dan perubahan woScope_ di WriteOff.gs. Bila Manajemen.gs belum dipasang, aplikasi memakai aturan menu lama dan tidak ada yang berubah.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">20.19</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.19</b><small>Surat Berita Acara Write Off pada menu Report Writte Off</small></span><span class="version-tag">WRITE OFF · SURAT</span></summary>
+          <div class="version-body"><ul>
+            <li>Menu Report Writte Off mendapat daftar “Surat Berita Acara” di atas “Unduh WO Sesuai”: Nama Cabang, Aksi (TTD MSA, TTD BM, Generate), dan Jenis WO. Hanya cabang yang memiliki ID_EWO berstatus Approve Writte Off dengan verifikasi “Sesuai” yang tampil, sesuai Wilayah Kerja akun.</li>
+            <li>TTD MSA (MIS Support Administration Staff) dan TTD BM (Branch Manager) diunggah sebagai gambar, dirapikan otomatis (dipotong sebatas goresan, dikecilkan) lalu disimpan per cabang di sheet EWO_TTD sehingga tidak perlu diunggah ulang untuk surat berikutnya. Gambar dapat diganti atau dihapus kapan saja.</li>
+            <li>Generate membuat surat PDF untuk setiap ID_EWO cabang tersebut (WO Reguler dan/atau WO Khusus): judul TRANSAKSI dan PERIODE, hari dan tanggal ID_EWO dibentuk, tabel “Yang berhasil di proses” (lengkap dengan No. THC, No. TAK, No. JV), tabel “Yang tidak dapat di proses”, tanda tangan, dan Tembusan. Nama penanda tangan diambil dari Update_Karyawan (cadangan: Akses_2) menurut cabang dan jabatan MIS SUPPORT ADMINISTRATION STAFF / BRANCH MANAGER, dicetak Proper Case tebal bergaris bawah.</li>
+            <li>Surat memakai kop dan font Liberation Serif dari surat-kop.js dan surat-font.js (kop tampil di setiap halaman, judul tabel diulang, blok tanda tangan tidak terpotong). Pembuat PDF ada di surat-wo.js dan dijalankan di browser tanpa pustaka luar.</li>
+            <li>Setiap Generate dicatat di sheet EWO_Surat dan EWO_Log. Tombol unduh tetap muncul setelah halaman dimuat ulang selama data WO dan TTD tidak berubah; bila berubah, tombol diganti keterangan “perlu generate ulang”.</li>
+            <li>Server: WriteOff.gs menambah aksi webWoSuratList, webWoSuratTtd, dan webWoSuratData (rute webWo* di Akses.gs tidak perlu diubah).</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">20.18</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.18</b><small>Menu Eksekusi Writte Off, Approve Writte Off, dan unggah data master WO</small></span><span class="version-tag">WRITE OFF · ID_EWO</span></summary>
+          <div class="version-body"><ul>
+            <li>Unggah Excel mengenali file “WO Reguler yyyy” dan “WO Khusus yyyy”. Header dicari di baris 3, data dibaca dari baris 4 sampai baris dengan nomor terbesar pada kolom No., lalu disimpan ke sheet WO Reguler / WO Khusus dengan kolom Tahun terisi otomatis dari nama file. Mengunggah ulang file yang sama memperbarui baris berdasarkan Loan No, tidak menggandakan.</li>
+            <li>Menu Eksekusi Writte Off: filter Cabang, Jenis WO, dan Tahun, lalu Proses Data membuat satu ID_EWO (contoh EWO-K-2026-000000001) berstatus Confirm. Proses Data tidak dapat diulang untuk kombinasi yang sama; ID_EWO dapat dibuka kembali selama masih Confirm.</li>
+            <li>Tombol Unduh membuat file Excel berisi ID_EWO pada nama file. Tombol Otomatis mengisi No. THC, No. TAK, Total Balance, dan masing-masing simpanan dari file tersebut berdasarkan Loan No; Total Simpanan dan PIUTANG YANG DI WO dihitung ulang oleh server dan sel kosong tidak mengubah isi (header wajib di baris 1 seperti file unduhan; file milik ID_EWO lain ditolak). Tombol Manual mengedit No. THC, No. TAK, dan delapan nominal dengan Total Simpanan dan PIUTANG YANG DI WO dihitung langsung. Tombol Batal mengeluarkan satu data dari proses.</li>
+            <li>Eksekusi Data mengubah status menjadi Approve Writte Off dan data menjadi hanya-lihat. Menu Approve Writte Off menampilkan ID_EWO tersebut sesuai Wilayah Kerja akun, dengan Cek Data (daftar seluruh data beserta total nilainya, hanya baca), Input JV, dan Verifikasi Nilai WO. Menu Report Writte Off menampilkan seluruh data WO (termasuk yang batal) dengan filter jenis, status, tahun, dan cabang, serta tombol unduh WO Sesuai Reguler / Khusus lengkap dengan No. THC, No. TAK, dan No. JV. ID_EWO yang sudah “Sesuai” dapat dibuka kembali lewat Batalkan Verifikasi (wajib beralasan, tercatat di EWO_Log); statusnya tetap Approve Writte Off. Hasil “Tidak” mengembalikan status ke Confirm agar nilai dapat direvisi; “Sesuai” mengunci ID_EWO.</li>
+            <li>Semua pemeriksaan hak dan status dilakukan di server (file baru WriteOff.gs, rute webWo* di Akses.gs). Perubahan dicatat pada sheet EWO_Log; ID_EWO dan status tersimpan di sheet EWO.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">20.17</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.17</b><small>Pemeriksaan upload bertahap dan pemulihan sesi staging setelah timeout</small></span><span class="version-tag">UPLOAD · ANTI-TIMEOUT</span></summary>
           <div class="version-body"><ul>
             <li>Pemeriksaan Loan No dan Total Balance pada unggahan PAR besar dipecah menjadi batch 3.000 baris per permintaan server agar satu eksekusi tidak perlu memproses seluruh 20 ribu baris sekaligus.</li>
             <li>Checkpoint pemeriksaan disimpan per batch. Jika server atau koneksi timeout, tombol Periksa LOAN NO dapat melanjutkan dari offset terakhir menggunakan staging yang sama.</li>
@@ -996,6 +1193,29 @@
       <button class="btn fit" value="ok" id="cf-ok" type="submit"></button>
     </div>
   </form>
+</dialog>
+
+<!-- Write Off: Manual (edit satu data), Otomatis (unggah Excel), Cek Data (Approve), Input JV, Verifikasi Nilai WO -->
+<dialog id="wo-manual" class="dlg wo-dlg" aria-labelledby="wm-title">
+  <form class="dlg-in" id="wm-form" novalidate></form>
+</dialog>
+<dialog id="wo-auto" class="dlg" aria-labelledby="wa-title">
+  <div class="dlg-in" id="wa-body"></div>
+</dialog>
+<dialog id="wo-detail" class="dlg wo-dlg wo-det-dlg" aria-labelledby="wd-title">
+  <div class="dlg-in" id="wd-body"></div>
+</dialog>
+<dialog id="wo-reopen" class="dlg sm-dlg" aria-labelledby="wr-title">
+  <form class="dlg-in" id="wr-form" novalidate></form>
+</dialog>
+<dialog id="wo-jv" class="dlg sm-dlg" aria-labelledby="wj-title">
+  <form class="dlg-in" id="wj-form" novalidate></form>
+</dialog>
+<dialog id="wo-verif" class="dlg sm-dlg" aria-labelledby="wv-title">
+  <div class="dlg-in" id="wv-body"></div>
+</dialog>
+<dialog id="wo-ttd" class="dlg sm-dlg" aria-labelledby="wt-title">
+  <form class="dlg-in" id="wt-form" novalidate></form>
 </dialog>
 
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
