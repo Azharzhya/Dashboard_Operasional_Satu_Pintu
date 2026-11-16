@@ -5477,8 +5477,8 @@ function paintEwoFilters() {
       + '). ID_EWO baru hanya dapat dibuat setelah Verifikasi Nilai WO ID_EWO sebelumnya berstatus "' + WO_VER_OK + '". Buka ID_EWO tersebut dari daftar di bawah.', 'bad');
   } else if (o && !o.n) {
     // Tidak ada data dengan "Verifikasi Nilai WO" dan "Status Baris" kosong: Proses Data gagal, ID_EWO tidak terbentuk.
-    setNote('ewo-note', 'Tidak ada data WO ' + (o.j === 'R' ? 'Reguler' : 'Khusus') + ' tahun ' + o.y + ' cabang ' + o.b + ' yang kolom "Verifikasi Nilai WO" dan "Status Baris"-nya masih kosong'
-      + (o.k ? ' (semua ID_EWO sebelumnya sudah "' + WO_VER_OK + '")' : '') + '. Input WO tidak dapat diproses dan ID_EWO tidak dibentuk.', 'bad');
+    setNote('ewo-note', 'Tidak ada data WO ' + (o.j === 'R' ? 'Reguler' : 'Khusus') + ' tahun ' + o.y + ' cabang ' + o.b + ' yang bisa di proses.'
+      + (o.k ? ' (semua ID_EWO sebelumnya sudah "' + WO_VER_OK + '")' : '') + '. Proses tidak dapat di teruskan.', 'bad');
   } else if (o) {
     setNote('ewo-note', fmt(o.n) + ' data WO ' + (o.j === 'R' ? 'Reguler' : 'Khusus') + ' tahun ' + o.y + ' cabang ' + o.b + ' siap diproses'
       + (o.k ? ' menjadi ID_EWO baru (ID_EWO sebelumnya: ' + fmt(o.k) + ', semuanya "' + WO_VER_OK + '").' : '.'));
