@@ -5322,7 +5322,8 @@ async function saveWoUpload() {
   if (!d.sent) {
     const ok = await askConfirm('Simpan data master ' + d.sheet + '?',
       'File: ' + d.name + '. ' + fmt(d.rows.length) + ' baris untuk tahun ' + d.tahun + ' akan disimpan ke sheet "' + d.sheet + '". Loan No yang sudah ada diperbarui (tidak digandakan). '
-      + 'Data yang sudah masuk ID_EWO, atau milik tahun lain, tidak diubah dan dilaporkan sebagai dilewati.', 'Simpan data master');
+      + 'Data yang sudah masuk ID_EWO, atau milik tahun lain, tidak diubah dan dilaporkan sebagai dilewati. Loan No baru pada cabang yang sudah memiliki ID_EWO tetap ditambahkan '
+      + 'dan menunggu diproses menjadi ID_EWO berikutnya.', 'Simpan data master');
     if (!ok) return;
   }
   if (pending !== d) return;
@@ -5463,17 +5464,24 @@ function paintEwoFilters() {
   woFillSelect($('ewo-jenis'), 'Pilih jenis WO…', c.jenis.map(j => [j, 'WO ' + (j === 'R' ? 'Reguler' : 'Khusus')]), p.j, !p.b);
   woFillSelect($('ewo-tahun'), 'Pilih tahun…', c.years.map(y => [y, String(y)]), p.y, !p.j);
   const o = woPicked();
-  $('ewo-proses').disabled = !o || !!o.e || wo.busy;
+  $('ewo-proses').disabled = !o || !o.ok || wo.busy;          // ok (dari server): tidak ada ID_EWO sebelumnya yang belum "Sesuai" dan ada data siap diproses
   if (wo.busy) return;
   if (wo.opt && !wo.opt.length && !wo.ewos.length) {
     const admin = state.user && state.user.tingkat === 'ADMINISTRATOR';
     setNote('ewo-note', admin ? 'Belum ada data master Write Off. Unggah file "WO Reguler yyyy.xlsx" atau "WO Khusus yyyy.xlsx" di menu Unggah Excel.'
       : state.user && state.user.tingkat === 'USER 3' ? 'Belum ada data Write Off pada cabang akun Anda' + (state.user.cabang ? ' (' + state.user.cabang + ')' : '') + '.'
       : 'Belum ada data Write Off pada cabang di Wilayah Kerja akun Anda.');
-  } else if (o && o.e) {
-    setNote('ewo-note', 'Kombinasi ini sudah diproses sebagai ' + o.e + (o.s ? ' (status ' + o.s + ')' : '') + '. Proses Data tidak dapat diulang; buka ID_EWO tersebut dari daftar di bawah.', 'bad');
+  } else if (o && o.blk) {
+    // ID_EWO sebelumnya belum "Sesuai": ID_EWO baru belum boleh dibuat.
+    setNote('ewo-note', 'Cabang ini sudah memiliki ' + o.blk.id + ' (status ' + o.blk.st + ', Verifikasi Nilai WO ' + (o.blk.ver ? '"' + o.blk.ver + '"' : 'belum diisi')
+      + '). ID_EWO baru hanya dapat dibuat setelah Verifikasi Nilai WO ID_EWO sebelumnya berstatus "' + WO_VER_OK + '". Buka ID_EWO tersebut dari daftar di bawah.', 'bad');
+  } else if (o && !o.n) {
+    // Tidak ada data dengan "Verifikasi Nilai WO" dan "Status Baris" kosong: Proses Data gagal, ID_EWO tidak terbentuk.
+    setNote('ewo-note', 'Tidak ada data WO ' + (o.j === 'R' ? 'Reguler' : 'Khusus') + ' tahun ' + o.y + ' cabang ' + o.b + ' yang kolom "Verifikasi Nilai WO" dan "Status Baris"-nya masih kosong'
+      + (o.k ? ' (semua ID_EWO sebelumnya sudah "' + WO_VER_OK + '")' : '') + '. Input WO tidak dapat diproses dan ID_EWO tidak dibentuk.', 'bad');
   } else if (o) {
-    setNote('ewo-note', fmt(o.n) + ' data WO ' + (o.j === 'R' ? 'Reguler' : 'Khusus') + ' tahun ' + o.y + ' cabang ' + o.b + ' siap diproses.');
+    setNote('ewo-note', fmt(o.n) + ' data WO ' + (o.j === 'R' ? 'Reguler' : 'Khusus') + ' tahun ' + o.y + ' cabang ' + o.b + ' siap diproses'
+      + (o.k ? ' menjadi ID_EWO baru (ID_EWO sebelumnya: ' + fmt(o.k) + ', semuanya "' + WO_VER_OK + '").' : '.'));
   } else setNote('ewo-note', wo.opt ? 'Pilih cabang, jenis WO, dan tahun WO, lalu tekan Proses Data.' : '');
 }
 
@@ -5503,9 +5511,10 @@ function paintEwoHistory() {
 
 async function woProses() {
   const o = woPicked();
-  if (!o || o.e || wo.busy) return;
+  if (!o || !o.ok || wo.busy) return;
   const ok = await askConfirm('Proses data Write Off?',
-    'Cabang ' + o.b + ' · WO ' + (o.j === 'R' ? 'Reguler' : 'Khusus') + ' · Tahun ' + o.y + ' · ' + fmt(o.n) + ' data. Satu ID_EWO berstatus "Confirm" akan dibuat dan tidak dapat dibuat ulang untuk kombinasi ini.',
+    'Cabang ' + o.b + ' · WO ' + (o.j === 'R' ? 'Reguler' : 'Khusus') + ' · Tahun ' + o.y + ' · ' + fmt(o.n) + ' data yang kolom "Verifikasi Nilai WO" dan "Status Baris"-nya masih kosong. '
+    + 'Satu ID_EWO baru berstatus "Confirm" akan dibuat' + (o.k ? ' (ID_EWO sebelumnya untuk kombinasi ini tidak diubah)' : '') + '.',
     'Proses Data');
   if (!ok) return;
   wo.busy = true; $('ewo-proses').disabled = true; setNote('ewo-note', 'Memproses data dan membuat ID_EWO…');
@@ -6265,7 +6274,12 @@ function loadSuratWO() {
 }
 
 const rsbEwo = id => { for (const br of (wo.rsb.items || [])) { const e = br.ewos.find(x => x.id === id); if (e) return e; } return null; };
-const rsbFileName = L => ('Berita Acara WO ' + L.jenis + ' Tahun ' + L.y + ' Cabang ' + L.b).replace(/[\\/:*?"<>|\u0000-\u001F]+/g, ' ').replace(/\s+/g, ' ').trim() + '.pdf';
+const rsbBranchOf = id => (wo.rsb.items || []).find(br => br.ewos.some(x => x.id === id)) || null;
+// Satu cabang boleh punya beberapa ID_EWO untuk jenis + tahun yang sama (ID_EWO berikutnya setelah yang sebelumnya "Sesuai").
+// Bila begitu, label tombol diberi nomor urut ID_EWO dan nama file diberi ID_EWO-nya agar tidak kembar; bila tidak, tampilan tetap seperti semula.
+const rsbDup = (br, e) => !!br && br.ewos.filter(x => x.j === e.j && x.y === e.y).length > 1;
+const rsbLabel = (br, e) => e.jenis + ' ' + e.y + (rsbDup(br, e) ? ' #' + (Number(String(e.id).slice(-9)) || e.id) : '');
+const rsbFileName = (L, tag) => ('Berita Acara WO ' + L.jenis + ' Tahun ' + L.y + ' Cabang ' + L.b + (tag ? ' ' + tag : '')).replace(/[\\/:*?"<>|\u0000-\u001F]+/g, ' ').replace(/\s+/g, ' ').trim() + '.pdf';
 const rsbNowStamp = () => { const d = new Date(); return today() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()); };
 function rsbSave(blob, name) {
   const url = URL.createObjectURL(blob), a = h('a', { href: url, download: name });
@@ -6306,7 +6320,7 @@ function rsbJenisCell(br) {
   const R = wo.rsb, shown = br.ewos.filter(e => e.state !== 'none');
   if (!shown.length) return h('span', { class: 'rsb-none', text: 'Belum digenerate' });
   return h('div', { class: 'rsb-dls' }, shown.map(e => {
-    const label = e.jenis + ' ' + e.y, info = e.id + ' · ' + fmt(e.n) + ' data diproses, ' + fmt(e.nb) + ' dibatalkan · digenerate ' + fmtStamp(e.genAt) + (e.genBy ? ' oleh ' + e.genBy : '');
+    const label = rsbLabel(br, e), info = e.id + ' · ' + fmt(e.n) + ' data diproses, ' + fmt(e.nb) + ' dibatalkan · digenerate ' + fmtStamp(e.genAt) + (e.genBy ? ' oleh ' + e.genBy : '');
     if (e.state === 'ready') return h('button', { class: 'btn sm ghost', type: 'button', 'data-act': 'dl', 'data-id': e.id, disabled: !!R.busy[e.id], title: info, text: '↓ ' + label });
     return h('span', { class: 'wo-status is-muted rsb-stale', title: info + '. Data atau TTD berubah sejak digenerate.', text: label + ' · perlu generate ulang' });
   }));
@@ -6491,13 +6505,13 @@ async function rsbGenerate(branch) {
   try {
     await loadSuratWO();
     for (const e of br.ewos) {
-      const label = e.jenis + ' ' + e.y;
+      const label = rsbLabel(br, e);
       setNote('rsb-note', 'Membuat Surat Berita Acara ' + label + ' cabang ' + branch + '…');
       const r = await woCall('webWoSuratData', { ewo: e.id, gen: '1' }, { timeoutMs: 120000 });
       if (wo.rsb !== R || !r) return;
       if (!r.ok) throw new Error(r.error || 'Gagal membuat surat ' + label + '.');
       const pdf = await SuratWO.build(r.letter);
-      R.cache[e.id] = { fp: r.fp, blob: pdf.blob(), name: rsbFileName(r.letter) };
+      R.cache[e.id] = { fp: r.fp, blob: pdf.blob(), name: rsbFileName(r.letter, rsbDup(br, e) ? e.id : '') };
       Object.assign(e, { state: 'ready', fp: r.fp, genAt: rsbNowStamp(), genBy: state.user.nik || '' });
       made.push(label);
       rsbPaint();
@@ -6517,13 +6531,14 @@ async function rsbDownload(id) {
   if (c && c.fp === e.fp) { rsbSave(c.blob, c.name); setNote('rsb-note', 'Surat "' + c.name + '" diunduh.', 'good'); return; }
   R.busy[id] = true; rsbPaint();
   try {
-    setNote('rsb-note', 'Menyiapkan surat ' + e.jenis + ' ' + e.y + '…');
+    const br = rsbBranchOf(id);
+    setNote('rsb-note', 'Menyiapkan surat ' + rsbLabel(br, e) + '…');
     await loadSuratWO();
     const r = await woCall('webWoSuratData', { ewo: id, gen: '0' }, { retry: true, timeoutMs: 120000 });
     if (wo.rsb !== R || !r) return;
     if (!r.ok) { rsbLoad(true); throw new Error(r.error || 'Surat tidak dapat disiapkan.'); }
     const pdf = await SuratWO.build(r.letter);
-    R.cache[id] = { fp: r.fp, blob: pdf.blob(), name: rsbFileName(r.letter) };
+    R.cache[id] = { fp: r.fp, blob: pdf.blob(), name: rsbFileName(r.letter, rsbDup(br, e) ? id : '') };
     rsbSave(R.cache[id].blob, R.cache[id].name);
     setNote('rsb-note', 'Surat "' + R.cache[id].name + '" diunduh.', 'good');
   } catch (err) { setNote('rsb-note', err.message || 'Gagal menyiapkan surat.', 'bad'); }

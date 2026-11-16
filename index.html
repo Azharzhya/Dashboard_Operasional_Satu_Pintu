@@ -18,7 +18,9 @@
 <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="mobile.css">
 <script src="dashboard.js" defer></script>
+<script src="mobile.js" defer></script>
 </head>
 <body>
 
@@ -774,17 +776,17 @@
           <h1 class="ph">Versi &amp; Changelog</h1>
           <p class="lead">Catatan fitur, penyempurnaan, dan perbaikan Dashboard Operasional Satu Pintu dari fondasi awal hingga rilis saat ini.</p>
         </div>
-        <span class="version-current"><i></i> Versi saat ini <b>v.20.20</b></span>
+        <span class="version-current"><i></i> Versi saat ini <b>v.20.21</b></span>
       </div>
 
       <section class="version-overview" aria-label="Ringkasan versi saat ini">
         <div class="version-overview-main">
           <span class="version-overview-label">RILIS TERBARU</span>
-          <strong>Dashboard Operasional Satu Pintu v.20.20</strong>
-          <p>Menu baru Manajemen (khusus Administrator) mengatur menu dan sub menu yang tampil untuk USER 0 sampai USER 3. Data semua menu Write Off kini mengikuti tingkat akun: USER 3 hanya cabangnya sendiri, USER 0, USER 1, dan USER 2 sesuai Wilayah Kerja.</p>
+          <strong>Dashboard Operasional Satu Pintu v.20.21</strong>
+          <p>Menu Eksekusi Writte Off kini mengizinkan cabang membuat ID_EWO baru untuk jenis dan tahun yang sama selama ID_EWO sebelumnya sudah “Sesuai” pada Verifikasi Nilai WO. ID_EWO baru hanya berisi data yang kolom Verifikasi Nilai WO dan Status Baris-nya masih kosong; bila tidak ada, input WO gagal diproses dan ID_EWO tidak terbentuk.</p>
         </div>
-        <div class="version-overview-stat"><strong>20.20</strong><span>Versi terbaru</span></div>
-        <div class="version-overview-stat"><strong>23 + 2</strong><span>Catatan rilis &amp; fondasi</span></div>
+        <div class="version-overview-stat"><strong>20.21</strong><span>Versi terbaru</span></div>
+        <div class="version-overview-stat"><strong>24 + 2</strong><span>Catatan rilis &amp; fondasi</span></div>
       </section>
 
       <div class="version-toolbar">
@@ -794,7 +796,19 @@
 
       <div id="version-list" class="version-list">
         <details class="version-item" open>
-          <summary><span class="version-marker latest">20.20</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.20</b><small>Menu Manajemen (show/hide menu per tingkat) dan cakupan data Write Off per tingkat</small></span><span class="version-tag">MANAJEMEN · HAK AKSES</span></summary>
+          <summary><span class="version-marker latest">20.21</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.21</b><small>Eksekusi Writte Off: ID_EWO baru untuk cabang yang sudah memiliki ID_EWO</small></span><span class="version-tag">WRITE OFF · ID_EWO</span></summary>
+          <div class="version-body"><ul>
+            <li>Kondisi lama: cabang tidak dapat memproses WO Reguler atau Khusus bila kombinasi cabang, jenis, dan tahun itu sudah memiliki ID_EWO. Kondisi baru: cabang tetap dapat melakukan input WO Reguler atau Khusus walau sebelumnya sudah memiliki ID_EWO.</li>
+            <li>Syarat penginputan: Verifikasi Nilai WO pada ID_EWO sebelumnya sudah berstatus “Sesuai”. Bila ada ID_EWO sebelumnya yang belum “Sesuai” (termasuk yang verifikasinya dibatalkan), Proses Data ditolak dan layar menampilkan ID_EWO yang menahan beserta statusnya.</li>
+            <li>Data pada ID_EWO baru hanya baris WO (Reguler atau Khusus) yang kolom ID_EWO, Verifikasi Nilai WO, dan Status Baris-nya masih kosong. Baris milik ID_EWO sebelumnya dan baris berstatus Batal tidak ikut terbawa.</li>
+            <li>Bila tidak ada data yang memenuhi kriteria tersebut, input WO gagal diproses dan ID_EWO tidak terbentuk (tidak ada baris yang tertinggal di sheet EWO maupun EWO_Log). Layar Eksekusi menampilkan jumlah data yang siap diproses; tombol Proses Data nonaktif bila tidak ada data atau masih ada ID_EWO yang belum “Sesuai”, dan server tetap memeriksa ulang aturan yang sama.</li>
+            <li>Agar data baru dapat masuk, Unggah Excel master WO tidak lagi menolak Loan No baru pada cabang yang sudah memiliki ID_EWO. Loan No yang sudah masuk ID_EWO, atau milik tahun lain, tetap tidak diubah dan dilaporkan sebagai dilewati.</li>
+            <li>Surat Berita Acara: bila satu cabang memiliki lebih dari satu ID_EWO untuk jenis dan tahun yang sama, tombol unduh diberi nomor urut ID_EWO (contoh “Reguler 2026 #7”) dan nama file memuat ID_EWO-nya. Tanpa kembaran, tampilan tetap seperti semula.</li>
+            <li>Server: perubahan di WriteOff.gs (woProses_, woOptions_, woImport_, woSuratList_); wajib redeploy Apps Script dengan Version “New version”. Tidak ada perubahan struktur sheet.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">20.20</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.20</b><small>Menu Manajemen (show/hide menu per tingkat) dan cakupan data Write Off per tingkat</small></span><span class="version-tag">MANAJEMEN · HAK AKSES</span></summary>
           <div class="version-body"><ul>
             <li>Menu baru “Manajemen” hanya muncul dan hanya dapat dipakai oleh Administrator (dicek di server). Tabelnya memuat setiap menu dan sub menu (Dashboard: Kabar Berita, Progres Harian, Analisa Cabang, Rekening Bergerak, Tool PAR; Eksekusi, Approve, dan Report Writte Off; Setting: Pengaturan Dashboard, Wilayah Kerja, Enable Download; Unggah Excel; Versi &amp; Changelog) dengan saklar tampil atau sembunyi untuk USER 0, USER 1, USER 2, dan USER 3.</li>
             <li>Pengaturan disimpan di sheet Menu_Akses (dibuat otomatis saat pertama disimpan, lengkap dengan siapa dan kapan mengubah) sehingga berlaku di semua perangkat. Sidebar akun terkait menyesuaikan saat login dan disegarkan otomatis saat aplikasi aktif, tanpa perlu login ulang. Halaman yang sedang dibuka lalu disembunyikan dialihkan ke menu pertama yang tampil.</li>
