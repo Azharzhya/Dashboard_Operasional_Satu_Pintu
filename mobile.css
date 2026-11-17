@@ -306,3 +306,10 @@ input,select{height:44px;font-size:16px}
 .dact .btn{min-height:44px;font-size:14px}
 #dtbl td::before,.wo-cards td::before{font-size:12px}
 }
+
+/* Tombol menu dengan sub menu: panah kecil di pojok kanan atas tombol pada navigasi bawah */
+@media (max-width:760px){
+  #app>.tabs .tab-caret{position:absolute;top:3px;right:5px;width:14px;height:14px;margin:0;transform:rotate(180deg)}
+  #app>.tabs .tab[aria-expanded=true] .tab-caret{transform:none}
+  #app>.tabs .tab-caret svg{width:13px;height:13px}
+}

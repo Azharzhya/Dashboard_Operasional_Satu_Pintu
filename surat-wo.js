@@ -1,4 +1,4 @@
-/* surat-wo.js -- penyusun PDF "Surat Berita Acara" Write Off (menu Report Writte Off).
+/* surat-wo.js -- penyusun PDF "Surat Berita Acara" Write-Off (menu Report Write-Off).
  *
  * Mandiri: tanpa pustaka PDF dari luar. Memakai dua berkas yang sudah ada di folder yang sama:
  *   surat-kop.js   -> window.SURAT_KOP    { x, y, w, h, data }  gambar kop (PNG base64) dan posisinya pada halaman A4 (poin)
@@ -302,13 +302,13 @@
     const tb = base(y, 22, 14), tw1 = F.bold.width(t1, 14);
     pg.line(ML + TW / 2 - tw1 / 2, tb + 2, ML + TW / 2 + tw1 / 2, tb + 2, 0.8);
     y += 22;
-    centerText('TRANSAKSI WRITTE OFF (WO) ' + jenisUp + ' PERIODE ' + L.y, ML + TW / 2, y, 18, F.bold, 10.5);
+    centerText('TRANSAKSI WRITE-OFF (WO) ' + jenisUp + ' PERIODE ' + L.y, ML + TW / 2, y, 18, F.bold, 10.5);
     y += 18 + 10;
 
     // Paragraf pembuka (rata kiri-kanan; nilai isian dicetak tebal)
     const N = F.normal, B = F.bold;
     const tok = [['Pada hari ini ', N], [L.hari, B], [' tanggal, ', N], [L.tanggal, B], [' KOMIDA Cabang ', N], [branchName(L.b), B],
-      [' telah melakukan eksekusi transaksi anggota Written Off (WO) ' + L.jenis + ' periode tahun ' + L.y + ', adapun data anggota yang kami lakukan Written Off (WO) sebagai berikut :', N]];
+      [' telah melakukan eksekusi transaksi anggota Writen-Off (WO) ' + L.jenis + ' periode tahun ' + L.y + ', adapun data anggota yang kami lakukan Writen-Off (WO) sebagai berikut :', N]];
     // Pemisahan kata dengan mempertahankan gaya; potongan yang tidak diawali spasi menyambung ke kata sebelumnya
     const words = [];
     let glue = false;
@@ -364,8 +364,10 @@
     };
     const rowHeight = (cells, widths, face) => Math.max(...cells.map((c, i) => cellBlock(c, widths[i], face, CELL).length)) * CELL_LEAD + 2 * PAD_Y;
 
-    function table(cols, rows, totalValue, withVoucher, emptyText) {
+    function table(cols, rows, totalValue, withVoucher, emptyText, lastHead) {
+      // lastHead: judul kolom ke-7 pengganti "No Voucher" (tabel 2: "Alasan Batal", tepat di samping Total WO)
       const widths = W1.slice(0, cols), heads = HEAD.slice(0, cols);
+      if (lastHead) heads[cols - 1] = lastHead;
       const hh = rowHeight(heads, widths, B);
       const drawHead = () => {
         let x = ML;
@@ -393,7 +395,7 @@
       drawCell(ML, y, labelW, totalH, ['Total'], B, CELL, 'c');
       const tv = rupiah(totalValue), tFit = Math.min(CELL, (widths[5] - 2 * PAD_X) / B.width(tv, 1));
       drawCell(ML + labelW, y, widths[5], totalH, [tv], B, tFit, 'r');
-      if (withVoucher) drawCell(ML + labelW + widths[5], y, widths[6], totalH, [''], N, CELL, 'l');
+      if (cols > 6) drawCell(ML + labelW + widths[5], y, widths[6], totalH, [''], N, CELL, 'l');   // sel kosong di bawah kolom ke-7 (No Voucher / Alasan Batal)
       y += totalH;
     }
 
@@ -404,7 +406,7 @@
     table(7, L.active.map((r, i) => [String(i + 1), r[0], r[1], r[2], r[3], rupiah(r[4]), voucherLines(r[5])]), L.totalActive, true, '');
     y += 16;
     heading('2.', 'Yang tidak dapat di proses:');
-    table(6, L.batal.map((r, i) => [String(i + 1), r[0], r[1], r[2], r[3], rupiah(r[4])]), L.totalBatal, false, 'Tidak ada data yang tidak dapat diproses');
+    table(7, L.batal.map((r, i) => [String(i + 1), r[0], r[1], r[2], r[3], rupiah(r[4]), clean(r[5]) || '-']), L.totalBatal, false, 'Tidak ada data yang tidak dapat diproses', 'Alasan Batal');
     y += 18;
 
     // Penutup + tanda tangan + tembusan: satu blok, tidak dipecah antar halaman
@@ -438,7 +440,7 @@
     y += nl * BODY_LEAD + 13 + 14;
     pg.text('Tembusan:', ML, base(y, BODY_LEAD, BODY), N, BODY);
     y += BODY_LEAD;
-    ['Koordinator Wilayah', 'Manager Regional', 'Koordinator Cabang'].forEach((s, i) => {
+    ['Sekretariat KSP Mitra Dhuafa', 'Koordinator Wilayah', 'Manager Regional'].forEach((s, i) => {
       pg.text((i + 1) + '.', ML + 18, base(y, 14, BODY), N, BODY);
       pg.text(s, ML + 36, base(y, 14, BODY), N, BODY);
       y += 14;
@@ -536,5 +538,209 @@
     return { bytes: bytes, pages: pages.length, blob: () => new Blob([bytes], { type: 'application/pdf' }) };
   }
 
-  root.SuratWO = { build: build, rupiah: rupiah, proper: proper };
+
+  /* ---------------------------------------------------------------------
+     Journal Voucher (Jurnal Write-Off): satu PDF per nomor transaksi, mengikuti Format_JV.docx
+     V = { no, jenis, tgl: 'dd/mm/yyyy', rows: [{ doc, d1, d2, c1, c2, amt }], total }   (dari server: webWoJurnalData)
+     Tanpa kop gambar; hanya font Liberation Serif dari surat-font.js.
+     --------------------------------------------------------------------- */
+  const JV_ML = 42, JV_TW = PAGE_W - 2 * JV_ML, JV_TOP = 44, JV_BOTTOM = 790;
+  const JV_SIZE = 8.5, JV_LEAD = 10.5, JV_PADX = 3, JV_PADY = 3;
+  const jvBase = (top, lead, size) => top + lead / 2 + size * 0.33;
+
+  function composeJurnal(V, F) {
+    const N = F.normal, B = F.bold;
+    const pages = [];
+    let pg = null, y = 0;
+    const newPage = () => { pg = new Page(F); pages.push(pg); y = JV_TOP; };
+    const room = h => y + h <= JV_BOTTOM;
+    const centerText = (s, cx, top, lead, face, size) => pg.text(s, cx - face.width(s, size) / 2, jvBase(top, lead, size), face, size);
+    newPage();
+
+    // Kepala
+    pg.text('MITRA DHUAFA', JV_ML, jvBase(y, 20, 14), N, 14);
+    y += 22;
+    centerText('JOURNAL VOUCHER', PAGE_W / 2, y, 20, B, 13.5);
+    y += 24;
+    const LAB = 84, rx = JV_ML + JV_TW * 0.5;
+    [['Voucher No.', V.no], ['Entry Date', V.tgl], ['Transaction Date', V.tgl]].forEach(([k, v], i) => {
+      const top = y + i * 14;
+      pg.text(k, JV_ML + LAB - N.width(k, 9), jvBase(top, 14, 9), N, 9);
+      pg.text(':', JV_ML + LAB + 3, jvBase(top, 14, 9), N, 9);
+      // nomor transaksi panjang diperkecil agar tidak menabrak kolom kanan
+      const room1 = rx - (JV_ML + LAB + 12) - 8, size = Math.min(9, room1 / Math.max(N.width(clean(v), 1), 1e-6));
+      pg.text(clean(v), JV_ML + LAB + 12, jvBase(top, 14, size), N, size);
+    });
+    const rb = jvBase(y, 14, 9);
+    pg.text('REMARKS', rx, rb, N, 9);
+    pg.line(rx, rb + 1.6, rx + N.width('REMARKS', 9), rb + 1.6, 0.6);
+    pg.text('TUTUP BUKU NASABAH', rx, jvBase(y + 14, 14, 9), N, 9);
+    y += 3 * 14 + 10;
+    centerText('DETAIL TRANSACTIONS', PAGE_W / 2, y, 18, N, 11);
+    y += 22;
+
+    // Tabel
+    const W = [74, 158, 28, 98]; const rest = (JV_TW - W.reduce((a, b) => a + b, 0)) / 2; W.push(rest, rest);
+    const HEAD = ['Document No.', 'Account', 'CCY', 'Description', 'Debit', 'Credit'];
+    const blocks = (s, w, size) => String(s).split('\n').reduce((a, part) => a.concat(part ? wrap(part, N, size, w - 2 * JV_PADX) : ['']), []);
+    const cell = (x, top, w, h, lines, face, size, align, mid) => {
+      pg.rect(x, top, w, h, 0.5);
+      const bh = lines.length * JV_LEAD;
+      let ty = mid ? top + (h - bh) / 2 : top + JV_PADY;
+      lines.forEach(s => {
+        const sz = Math.min(size, s ? (w - 2 * JV_PADX) / Math.max(face.width(s, 1), 1e-6) : size), tw = face.width(s, sz);
+        const tx = align === 'c' ? x + (w - tw) / 2 : align === 'r' ? x + w - JV_PADX - tw : x + JV_PADX;
+        pg.text(s, tx, jvBase(ty, JV_LEAD, sz), face, sz);
+        ty += JV_LEAD;
+      });
+    };
+    const rowH = cells => Math.max(...cells.map((c, i) => blocks(c, W[i], JV_SIZE).length)) * JV_LEAD + 2 * JV_PADY;
+    const HH = JV_LEAD + 2 * JV_PADY + 2;
+    const drawHead = () => {
+      let x = JV_ML;
+      HEAD.forEach((t, i) => { cell(x, y, W[i], HH, [t], N, 8, 'c', true); x += W[i]; });
+      y += HH;
+    };
+    const drawRow = (cells, aligns) => {
+      const h = rowH(cells);
+      let x = JV_ML;
+      cells.forEach((t, i) => { cell(x, y, W[i], h, blocks(t, W[i], JV_SIZE), N, JV_SIZE, aligns[i], false); x += W[i]; });
+      y += h;
+    };
+    const AL = ['l', 'l', 'l', 'l', 'r', 'r'];
+    const TOTAL_H = JV_LEAD + 2 * JV_PADY + 2, SIGN_H = 120;
+    drawHead();
+    V.rows.forEach((r, i) => {
+      const dr = [r.doc, r.d1 + '\n' + r.d2, 'IDR', 'PELUNASAN POKOK', rupiah(r.amt), ''];
+      const cr = [r.doc, r.c1 + '\n' + r.c2, 'IDR', 'PELUNASAN POKOK', '', rupiah(r.amt)];
+      const last = i === V.rows.length - 1;
+      if (!room(rowH(dr) + rowH(cr) + (last ? TOTAL_H : 0))) { newPage(); drawHead(); }   // pasangan Debit + Credit tidak dipisah antar halaman
+      drawRow(dr, AL); drawRow(cr, AL);
+    });
+    // Total
+    const labW = W[0] + W[1] + W[2] + W[3];
+    cell(JV_ML, y, labW, TOTAL_H, ['TOTAL IN BASE CURRENCY'], N, 8.5, 'r', true);
+    cell(JV_ML + labW, y, W[4], TOTAL_H, [rupiah(V.total)], N, 8.5, 'r', true);
+    cell(JV_ML + labW + W[4], y, W[5], TOTAL_H, [rupiah(V.total)], N, 8.5, 'r', true);
+    y += TOTAL_H + 14;
+
+    // DIBUAT / DISETUJUI (satu blok, tidak dipotong halaman)
+    if (!room(SIGN_H)) newPage();
+    const half = JV_TW / 2;
+    [['DIBUAT', JV_ML + half / 2], ['DISETUJUI', JV_ML + half * 1.5]].forEach(([t, cx]) => {
+      const tw = N.width(t, 9), b = jvBase(y, 14, 9);
+      pg.text(t, cx - tw / 2, b, N, 9);
+      pg.line(cx - tw / 2, b + 1.6, cx + tw / 2, b + 1.6, 0.6);
+    });
+    y += 14 + 62;
+    pg.line(JV_ML + 4, y, JV_ML + half - 8, y, 0.8);
+    pg.line(JV_ML + half + 8, y, JV_ML + JV_TW - 4, y, 0.8);
+
+    if (pages.length > 1) pages.forEach((p, i) => {
+      const t = 'Voucher No. ' + clean(V.no) + '  -  Halaman ' + (i + 1) + ' dari ' + pages.length, tw = N.width(t, 8);
+      p.text(t, PAGE_W / 2 - tw / 2, 818, N, 8);
+    });
+    return pages;
+  }
+
+  async function embedFonts(pdf, faces) {
+    const fontRefs = {};
+    for (const key of ['normal', 'bold', 'italic']) {
+      const fc = faces[key], f = fc.f;
+      const fileId = pdf.add(await pdf.stream(`/Length1 ${f.bytes.length}`, f.bytes, true));
+      const desc = pdf.add([`<< /Type /FontDescriptor /FontName /${fc.name} /Flags ${fc.flags} /FontBBox [${f.bbox.map(v => Math.round(v * 1000 / f.upm)).join(' ')}] `
+        + `/ItalicAngle ${num(f.italicAngle)} /Ascent ${Math.round(f.ascent * 1000 / f.upm)} /Descent ${Math.round(f.descent * 1000 / f.upm)} `
+        + `/CapHeight ${Math.round(f.capHeight * 1000 / f.upm)} /StemV ${fc.stemV} /FontFile2 ${fileId} 0 R >>`]);
+      const widths = f.adv.map(a => Math.round(a * 1000 / f.upm)).join(' ');
+      const cid = pdf.add([`<< /Type /Font /Subtype /CIDFontType2 /BaseFont /${fc.name} /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> `
+        + `/FontDescriptor ${desc} 0 R /CIDToGIDMap /Identity /DW 1000 /W [0 [${widths}]] >>`]);
+      const entries = [...fc.used.entries()].sort((a, b) => a[0] - b[0]);
+      let cmap = '/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n/CMapName /Adobe-Identity-UCS def\n/CMapType 2 def\n'
+        + '1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n';
+      for (let i = 0; i < entries.length; i += 100) {
+        const part = entries.slice(i, i + 100);
+        cmap += part.length + ' beginbfchar\n' + part.map(([g, cp]) => '<' + g.toString(16).padStart(4, '0') + '> <' + cp.toString(16).padStart(4, '0') + '>').join('\n') + '\nendbfchar\n';
+      }
+      cmap += 'endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend';
+      const tu = pdf.add(await pdf.stream('', enc.encode(cmap), true));
+      fontRefs[key] = pdf.add([`<< /Type /Font /Subtype /Type0 /BaseFont /${fc.name} /Encoding /Identity-H /DescendantFonts [${cid} 0 R] /ToUnicode ${tu} 0 R >>`]);
+    }
+    return fontRefs;
+  }
+
+  // Satu PDF Journal Voucher. Mengembalikan { bytes: Uint8Array, pages }.
+  async function buildJurnal(V, opts) {
+    const fontSrc = (opts && opts.fonts) || root.SURAT_FONTS;
+    if (!fontSrc || !fontSrc.files || !fontSrc.files.normal || !fontSrc.files.bold || !fontSrc.files.italic) throw new Error('Font surat (surat-font.js) belum dimuat.');
+    if (!V || !V.no || !Array.isArray(V.rows) || !V.rows.length) throw new Error('Isi jurnal tidak lengkap.');
+    const fam = String(fontSrc.family || 'LiberationSerif').replace(/[^A-Za-z0-9]/g, '');
+    const faces = {
+      normal: new Face(fam, b64ToBytes(fontSrc.files.normal), 34, 80),
+      bold: new Face(fam + '-Bold', b64ToBytes(fontSrc.files.bold), 34, 140),
+      italic: new Face(fam + '-Italic', b64ToBytes(fontSrc.files.italic), 98, 80)
+    };
+    ['normal', 'bold', 'italic'].forEach((k, i) => { faces[k].id = i + 1; });
+    const pdf = new Pdf();
+    const catalog = pdf.reserve(), pagesId = pdf.reserve(), info = pdf.reserve();
+    const pages = composeJurnal(V, faces);
+    const fontRefs = await embedFonts(pdf, faces);
+    const res = `<< /Font << /F1 ${fontRefs.normal} 0 R /F2 ${fontRefs.bold} 0 R /F3 ${fontRefs.italic} 0 R >> >>`;
+    const pageIds = [];
+    for (const pg of pages) {
+      const content = pdf.add(await pdf.stream('', enc.encode(pg.ops.join('\n')), true));
+      pageIds.push(pdf.add([`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${num(PAGE_W)} ${num(PAGE_H)}] /Resources ${res} /Contents ${content} 0 R >>`]));
+    }
+    pdf.set(pagesId, [`<< /Type /Pages /Kids [${pageIds.map(i => i + ' 0 R').join(' ')}] /Count ${pageIds.length} >>`]);
+    pdf.set(catalog, [`<< /Type /Catalog /Pages ${pagesId} 0 R >>`]);
+    const d = new Date(), z = n => String(n).padStart(2, '0');
+    const stamp = `D:${d.getUTCFullYear()}${z(d.getUTCMonth() + 1)}${z(d.getUTCDate())}${z(d.getUTCHours())}${z(d.getUTCMinutes())}${z(d.getUTCSeconds())}Z`;
+    pdf.set(info, [`<< /Title ${utf16hex('Journal Voucher ' + clean(V.no))} /Subject ${utf16hex('Jurnal Write-Off ' + clean(V.jenis || ''))} /Creator ${utf16hex('Dashboard Operasional Satu Pintu')} /CreationDate (${stamp}) >>`]);
+    return { bytes: pdf.bytes(catalog, info), pages: pages.length };
+  }
+
+  /* ---------------------------------------------------------------------
+     ZIP sederhana (tanpa kompresi: PDF sudah terkompresi). Nama berkas UTF-8.
+     files = [{ name, bytes: Uint8Array }]  ->  Blob application/zip
+     --------------------------------------------------------------------- */
+  const CRC_T = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; }
+    return t;
+  })();
+  function crc32(u8) {
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 255] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  function zip(files) {
+    if (!files.length) throw new Error('Tidak ada berkas untuk di-ZIP.');
+    if (files.length > 60000) throw new Error('Terlalu banyak berkas untuk satu ZIP.');
+    const d = new Date();
+    const dosTime = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+    const dosDate = ((Math.max(d.getFullYear(), 1980) - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+    const parts = [], central = [];
+    let off = 0;
+    files.forEach(f => {
+      const name = enc.encode(f.name), data = f.bytes, crc = crc32(data);
+      const lh = new DataView(new ArrayBuffer(30));
+      lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
+      lh.setUint16(10, dosTime, true); lh.setUint16(12, dosDate, true); lh.setUint32(14, crc, true);
+      lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true); lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+      parts.push(new Uint8Array(lh.buffer), name, data);
+      const ch = new DataView(new ArrayBuffer(46));
+      ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true); ch.setUint16(10, 0, true);
+      ch.setUint16(12, dosTime, true); ch.setUint16(14, dosDate, true); ch.setUint32(16, crc, true);
+      ch.setUint32(20, data.length, true); ch.setUint32(24, data.length, true); ch.setUint16(28, name.length, true);
+      ch.setUint32(42, off, true);
+      central.push(new Uint8Array(ch.buffer), name);
+      off += 30 + name.length + data.length;
+    });
+    const cdSize = central.reduce((a, u) => a + u.length, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+    end.setUint32(12, cdSize, true); end.setUint32(16, off, true);
+    return new Blob(parts.concat(central, [new Uint8Array(end.buffer)]), { type: 'application/zip' });
+  }
+
+  root.SuratWO = { build: build, buildJurnal: buildJurnal, zip: zip, rupiah: rupiah, proper: proper };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -2,7 +2,7 @@
    Dashboard Operasional -- dashboard.js
    Urutan:  1 Konfigurasi · 2 Alat bantu · 3 API & sesi · 4 Tampilan umum
             5 Masuk · 6 Dashboard · 7 Rincian · 8 Ringkasan
-            9 Baca Excel · 10 Unggah · 11 Unduh Excel · 11C Write Off · 12 Mulai
+            9 Baca Excel · 10 Unggah · 11 Unduh Excel · 11C Write-Off · 12 Mulai
    Aturan: isi dari Sheet hanya dipasang lewat textContent / DOM, tidak pernah sebagai HTML.
    ===================================================================== */
 (() => {
@@ -272,7 +272,7 @@ function startProgress(label, expectWait, alive) {
    --------------------------------------------------------------------- */
 const state = {
   user: null, sessionToken: '', loadSeq: 0, loading: false, lastCheck: 0, dataVersion: '',
-  imageDownloadLevels: [], imageDownloadConfigLoaded: false, imageDownloadDirty: false, settingPage: 'global',
+  imageDownloadLevels: [], imageDownloadConfigLoaded: false, imageDownloadDirty: false, settingPage: 'global', woPage: 'ewo', navOpen: '',
   data: null, byCat: {}, branches: new Map(), groups: {}, clientIdCounts: new Map(),
   cat: 'a', q: '', branch: '', staf: '', sort: { label: '', dir: 1 }, page: 0, size: 50, view: [],
   sumBy: 'branch', sumSort: { key: 'n', dir: -1 }, sumQ: '', wjDirty: false, pola: '', polaDirty: false, polaLoading: false,
@@ -300,7 +300,8 @@ function showView(name, msg) {
 function showErr(msg) { $('err').hidden = !msg; $('err').textContent = msg || ''; }
 
 const canSetting = u => !!u && (u.tingkat === 'ADMINISTRATOR' || u.tingkat === 'USER 0');   // menu Setting
-const TABS = ['dashboard', 'ewo', 'awo', 'rwo', 'set', 'up', 'mgmt', 'versions'];
+const TABS = ['dashboard', 'wo', 'set', 'up', 'versions'];      // 'wo' = Write-Off (dropdown: Eksekusi, Approve, Report); Manajemen kini sub menu Setting
+const WO_PAGES = ['ewo', 'awo', 'rwo'];                        // urutan sub menu Write-Off
 // Versi data bersama: setiap balasan halaman Dashboard membawa dataVersion yang sama untuk semua halaman.
 // Bila berubah (unggahan baru, Segarkan data, dsb.), data halaman lain di memori dianggap usang bersamaan
 // dan dimuat ulang saat dibuka (dari cache server, jadi cepat). Halaman sumber tidak dimuat ulang.
@@ -360,12 +361,99 @@ function selectTab(which, focus) {
     $('p-' + k).hidden = !on;
   });
   if (which === 'dashboard') selectDashboardPage(state.dashboardPage || 'move');
-  if (which === 'set') loadPola();
+  if (which === 'set') { loadPola(); setSettingPage(state.settingPage || 'global'); }
+  if (which === 'wo') selectWoPage(state.woPage || 'ewo');
+  state.navOpen = !navMobile() && NAV_GROUPS.indexOf(which) > -1 ? which : '';   // desktop: sub menu halaman aktif terbuka; HP: kotak ditutup
+  navPaint();
+  if (focus) $('t-' + which).focus();
+}
+
+/* ---------- Sub menu di sidebar (accordion): Dashboard, Write-Off, Setting ----------
+   Desktop: sub menu terbuka ke bawah tepat di bawah menu induknya (satu grup terbuka, yaitu grup halaman yang sedang dipakai).
+   HP: sub menu muncul sebagai kotak di atas bilah navigasi bawah (dipindah keluar dari <nav> supaya tidak terpotong). */
+const NAV_GROUPS = ['dashboard', 'wo', 'set'];
+const navMobile = () => window.matchMedia('(max-width:760px)').matches;
+const navSubItems = k => [...document.querySelectorAll('#sub-' + k + ' .tab-sub-item')].filter(b => !b.hidden);
+function menuFirstWo() { return WO_PAGES.find(k => menuOn('wo.' + k)) || 'ewo'; }
+function selectWoPage(which) {
+  if (WO_PAGES.indexOf(which) < 0) which = 'ewo';
+  if (state.user && !menuOn('wo.' + which)) which = menuFirstWo();   // sub menu yang disembunyikan Manajemen
+  state.woPage = which;
+  WO_PAGES.forEach(k => { $('p-' + k).hidden = k !== which; });
+  document.querySelectorAll('[data-wopage]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.wopage === which)));
   if (which === 'ewo') woEnter();
   if (which === 'awo') woEnterApprove();
   if (which === 'rwo') woEnterReport();
-  if (which === 'mgmt') mgEnter();
-  if (focus) $('t-' + which).focus();
+}
+// Klik sub menu: atur halamannya lalu buka menu utamanya (bisa dari menu utama mana pun)
+function openDashPage(which) { state.dashboardPage = which; selectTab('dashboard'); }
+function openWoPage(which) { state.woPage = which; selectTab('wo'); }
+function openSetPage(which) { state.settingPage = which; selectTab('set'); }
+
+function navPlace(k) {          // hanya HP: kotak sub menu di atas tombol induknya
+  const m = $('sub-' + k), r = $('t-' + k).getBoundingClientRect();
+  const mw = m.offsetWidth, mh = m.offsetHeight, vw = document.documentElement.clientWidth;
+  m.style.left = Math.round(Math.min(Math.max(8, r.left + r.width / 2 - mw / 2), Math.max(8, vw - mw - 8))) + 'px';
+  m.style.top = Math.round(Math.max(8, r.top - mh - 8)) + 'px';
+}
+function navPaint() {
+  NAV_GROUPS.forEach(k => {
+    const t = $('t-' + k), m = $('sub-' + k);
+    const open = !t.hidden && state.navOpen === k && navSubItems(k).length > 0;
+    m.hidden = !open;
+    t.setAttribute('aria-expanded', String(open));
+    if (open && navMobile()) navPlace(k);
+  });
+}
+// Letakkan kotak sub menu: desktop = tepat di bawah menu induk di sidebar; HP = di luar <nav> (backdrop-filter bilah bawah memotong elemen fixed)
+function navDock() {
+  const mobile = navMobile();
+  NAV_GROUPS.forEach(k => {
+    const m = $('sub-' + k);
+    if (mobile) { if (m.parentNode !== $('app')) $('app').appendChild(m); }
+    else if (m.previousElementSibling !== $('t-' + k)) $('t-' + k).after(m);
+  });
+  state.navOpen = mobile ? '' : (NAV_GROUPS.find(k => !$('p-' + k).hidden) || '');
+  navPaint();
+}
+function navParentClick(k) {
+  if (navMobile()) { state.navOpen = state.navOpen === k ? '' : k; navPaint(); return; }
+  if (!$('p-' + k).hidden) { state.navOpen = state.navOpen === k ? '' : k; navPaint(); }   // menu aktif: buka / tutup sub menunya
+  else selectTab(k);                                                                      // pindah ke menu itu; sub menunya ikut terbuka
+}
+function bindNavGroups() {
+  const nav = $('app').querySelector('.tabs');
+  NAV_GROUPS.forEach(k => {
+    const m = $('sub-' + k);
+    m.addEventListener('click', e => {
+      const b = e.target.closest('.tab-sub-item'); if (!b || b.hidden) return;
+      if (b.dataset.dashpage) openDashPage(b.dataset.dashpage);
+      else if (b.dataset.wopage) openWoPage(b.dataset.wopage);
+      else if (b.dataset.setpage) openSetPage(b.dataset.setpage);
+    });
+    m.addEventListener('keydown', e => {
+      const items = navSubItems(k), i = items.indexOf(document.activeElement);
+      if (e.key === 'Escape' && navMobile()) { e.preventDefault(); state.navOpen = ''; navPaint(); $('t-' + k).focus(); return; }
+      const to = e.key === 'ArrowDown' ? items[(i + 1) % items.length] : e.key === 'ArrowUp' ? items[(i - 1 + items.length) % items.length]
+        : e.key === 'Home' ? items[0] : e.key === 'End' ? items[items.length - 1] : null;
+      if (to) { e.preventDefault(); to.focus(); }
+    });
+    $('t-' + k).addEventListener('keydown', e => {
+      if (e.key !== 'ArrowDown' || !navSubItems(k).length) return;
+      e.preventDefault(); e.stopPropagation();
+      state.navOpen = k; navPaint(); const items = navSubItems(k); (items.find(b => b.getAttribute('aria-pressed') === 'true') || items[0]).focus();
+    });
+  });
+  document.addEventListener('click', e => {          // HP: klik di luar menutup kotak sub menu
+    if (!navMobile() || !state.navOpen) return;
+    if (e.target.closest('.tab-sub') || e.target.closest('.tab')) return;
+    state.navOpen = ''; navPaint();
+  });
+  nav.addEventListener('scroll', () => { if (navMobile() && state.navOpen) { state.navOpen = ''; navPaint(); } }, { passive: true });
+  const mq = window.matchMedia('(max-width:760px)');
+  (mq.addEventListener ? mq.addEventListener.bind(mq, 'change') : mq.addListener.bind(mq))(navDock);
+  window.addEventListener('resize', () => { if (navMobile() && state.navOpen) { state.navOpen = ''; navPaint(); } });
+  navDock();
 }
 
 function paintUser(user) {
@@ -484,7 +572,7 @@ function logout(msg, forceRefresh) {
   stopAutoSync();
   initialPasswordChangeTicket = '';
   state.loadSeq++; state.loading = false; state.user = null; state.dataVersion = ''; state.sessionToken = ''; state.data = null; state.byCat = {}; state.groups = {}; state.clientIdCounts = new Map(); state.wjDirty = false; state.pola = ''; state.polaDirty = false;
-  state.imageDownloadLevels = []; state.imageDownloadConfigLoaded = false; state.imageDownloadDirty = false; state.settingPage = 'global';
+  state.imageDownloadLevels = []; state.imageDownloadConfigLoaded = false; state.imageDownloadDirty = false; state.settingPage = 'global'; state.woPage = 'ewo';
   session.clear();
   const cacheClear = cache.clear();
   state.wilayah = null; state.wilayahDraft = []; state.wilayahDrafts = Object.create(null); state.wilayahSelected = ''; setNote('wjmsg', '');
@@ -594,7 +682,7 @@ function enterApp(user) {
   state.menuAccess = menuCached(user.nik); state.menuAt = 0; state.menuLoading = false;   // sidebar langsung benar; disegarkan dari server di bawah
   state.dataVersion = '';
   state.sessionToken = (session.get() || {}).token || '';
-  state.imageDownloadLevels = []; state.imageDownloadConfigLoaded = false; state.imageDownloadDirty = false; state.settingPage = 'global';
+  state.imageDownloadLevels = []; state.imageDownloadConfigLoaded = false; state.imageDownloadDirty = false; state.settingPage = 'global'; state.woPage = 'ewo';
   paintUser(user);
   state.cat = 'a'; state.q = ''; state.branch = ''; state.staf = ''; state.page = 0; state.sort = { label: '', dir: 1 };
   resetUpload(); setNote('setmsg', ''); setNote('wjmsg', ''); setNote('rb-setting-msg', ''); setNote('pola-msg', ''); state.wjDirty = false; state.pola = ''; state.polaDirty = false;
@@ -1090,10 +1178,10 @@ function parseUploadFilename(filename) {
   const name = String(filename || '').trim();
   if (!/\.(xlsx|xls)$/i.test(name)) throw new Error('File wajib berformat Excel .xls atau .xlsx. File .xlsm tidak diterima.');
   const base = name.replace(/\.(xlsx|xls)$/i, '').trim();
-  // Data master Write Off: "WO Reguler yyyy.xlsx" / "WO Khusus yyyy.xlsx" (sama dengan woParseFile_ di WriteOff.gs)
+  // Data master Write-Off: "WO Reguler yyyy.xlsx" / "WO Khusus yyyy.xlsx" (sama dengan woParseFile_ di WriteOff.gs)
   const woM = /^WO[\s_-]+(REGULER|KHUSUS)[\s_-]+((?:19|20)\d{2})(?!\d)/i.exec(base);
   if (woM) {
-    if (/EWO-[RK]-\d{4}-\d{9}/i.test(base)) throw new Error('File ini hasil unduhan Eksekusi Writte Off (memuat ID_EWO). Isi No. THC dan No. TAK lewat tombol Otomatis di menu Eksekusi Writte Off, bukan lewat Unggah Excel.');
+    if (/EWO-[RK]-\d{4}-\d{9}/i.test(base)) throw new Error('File ini hasil unduhan Eksekusi Write-Off (memuat ID_EWO). Isi No. THC dan No. TAK lewat tombol Otomatis di menu Write-Off > Eksekusi Write-Off, bukan lewat Unggah Excel.');
     const code = woM[1].toUpperCase() === 'REGULER' ? 'R' : 'K';
     return { type: 'WO', code, jenis: code === 'R' ? 'Reguler' : 'Khusus', sheet: code === 'R' ? 'WO Reguler' : 'WO Khusus', tahun: Number(woM[2]) };
   }
@@ -1289,7 +1377,7 @@ async function pickFile(file) {
     }
     if (pending.type === 'WO') {
       renderWoPreview(pending);
-      setNote('upmsg', 'File dikenali sebagai data master Write Off (' + pending.sheet + ', tahun ' + pending.tahun + '). Periksa pratinjau, lalu simpan. Data_Upload dan Dashboard tidak berubah.');
+      setNote('upmsg', 'File dikenali sebagai data master Write-Off (' + pending.sheet + ', tahun ' + pending.tahun + '). Periksa pratinjau, lalu simpan. Data_Upload dan Dashboard tidak berubah.');
     } else if (pending.type === 'ANALISA') {
       renderAnalisaPreview(pending);
       setNote('upmsg', 'File dikenali sebagai Analisa. Data akan disimpan ke sheet Analisa dan tidak mengubah Data_Upload. Jika periode sama sudah ada, data periode itu akan diperbarui.');
@@ -3137,7 +3225,7 @@ function imgBuildRegionalNews() {
     });
     regionalNewsText(ctx, note1, p.x, p.y + chH1 + GAP + chH2 + 18 + 20, INNER, '400 19px Arial, sans-serif', '#728178', 2, 28);
   } else {
-    regionalNewsText(ctx, 'Data Analisa Cabang belum tersedia. Unggah file Analisa melalui menu Unggah Excel agar perkembangan cabang dapat ditampilkan.',
+    regionalNewsText(ctx, 'Data Analisa Cabang belum tersedia. Unggah file Analisa melalui menu Import Data agar perkembangan cabang dapat ditampilkan.',
       p.x, p.y + 40, p.width, '400 30px Arial, sans-serif', '#53665D', 3, 38);
   }
   y += 170 + c1 + SECTION_GAP;
@@ -3352,7 +3440,7 @@ function paintKabarBerita() {
 
   // 1. Perkembangan Cabang
   const s1 = !L.analisa ? kbWait('Analisa Cabang', 6)
-    : !m.anReady ? kbMessage('Data Analisa Cabang belum tersedia. Unggah file Analisa melalui menu Unggah Excel agar perkembangan cabang dapat ditampilkan.')
+    : !m.anReady ? kbMessage('Data Analisa Cabang belum tersedia. Unggah file Analisa melalui menu Import Data agar perkembangan cabang dapat ditampilkan.')
       : h('div', null,
         h('div', { class: 'kb-grid' }, [...KB_DEV_KEYS, ...KB_ACHV_KEYS].map(key => {
           const mt = m.metricOf(key), money = mt.kind === 'money';
@@ -4817,12 +4905,12 @@ async function savePola() {
 const MENU_CACHE = 'dash_menu_v1';
 const MENU_REFRESH_MS = 60 * 1000;
 const DASH_PAGES = ['sum', 'progress', 'analisa', 'move', 'dash'];      // urutan tombol sub menu Dashboard
-const SET_PAGES = ['global', 'wilayah', 'enable-download'];             // urutan tombol sub menu Setting
+const SET_PAGES = ['global', 'wilayah', 'enable-download', 'write-off', 'manajemen'];             // urutan tombol sub menu Setting
 const MSG_OLD_MENU = 'Server belum mendukung menu Manajemen. Tambahkan file Manajemen.gs dan perbarui Akses.gs di Apps Script, lalu Deploy > Manage deployments > Edit > Version: New version > Deploy.';
 
-// Aturan sebelum Manajemen ada: Setting untuk ADMINISTRATOR dan USER 0; Unggah Excel, Enable Download, dan Manajemen khusus ADMINISTRATOR.
+// Aturan sebelum Manajemen ada: Setting untuk ADMINISTRATOR dan USER 0; Import Data, Enable Download, Write-Off (Setting), dan Manajemen (sub menu Setting) khusus ADMINISTRATOR.
 function menuLegacy(key, u) {
-  if (key === 'mgmt' || key === 'up' || key === 'set.enable-download') return u.tingkat === 'ADMINISTRATOR';
+  if (key === 'set.manajemen' || key === 'up' || key === 'set.enable-download' || key === 'set.write-off') return u.tingkat === 'ADMINISTRATOR';
   if (key === 'set' || key.indexOf('set.') === 0) return canSetting(u);
   return true;
 }
@@ -4831,9 +4919,14 @@ function menuOn(key) {
   const u = state.user;
   if (!u) return false;
   if (u.tingkat === 'ADMINISTRATOR') return true;
-  if (key === 'mgmt') return false;
-  const m = state.menuAccess;
-  return m && Object.prototype.hasOwnProperty.call(m, key) ? !!m[key] : menuLegacy(key, u);
+  if (key === 'set.manajemen') return false;
+  const m = state.menuAccess, has = k => !!m && Object.prototype.hasOwnProperty.call(m, k);
+  if (has(key)) return !!m[key];
+  // Peta menu dari server lama (sebelum Write-Off digabung): Eksekusi/Approve/Report masih berdiri sendiri -> pakai pengaturannya
+  const old = { 'wo.ewo': 'ewo', 'wo.awo': 'awo', 'wo.rwo': 'rwo' }[key];
+  if (old && has(old)) return !!m[old];
+  if (key === 'wo' && (has('ewo') || has('awo') || has('rwo'))) return WO_PAGES.some(k => menuOn('wo.' + k));
+  return menuLegacy(key, u);
 }
 function menuFirstTab() { return TABS.find(k => menuOn(k)) || 'versions'; }
 function menuFirstDash() { return DASH_PAGES.find(p => menuOn('dashboard.' + p)) || ''; }
@@ -4854,17 +4947,20 @@ function menuApply(redirect) {
   TABS.forEach(k => { const t = $('t-' + k); if (t) t.hidden = !menuOn(k); });
   document.querySelectorAll('[data-dashpage]').forEach(b => { b.hidden = !menuOn('dashboard.' + b.dataset.dashpage); });
   document.querySelectorAll('[data-setpage]').forEach(b => { b.hidden = !menuOn('set.' + b.dataset.setpage); });
+  document.querySelectorAll('[data-wopage]').forEach(b => { b.hidden = !menuOn('wo.' + b.dataset.wopage); });
   const nav = document.querySelector('#app>.tabs');
   if (nav) {
     const count = TABS.filter(k => !$('t-' + k).hidden).length;
     nav.style.setProperty('--nav-count', String(count));
     nav.classList.toggle('is-dense', count >= 8);   // 8 tombol (ADMINISTRATOR): huruf dan jarak bilah bawah di layar HP dirapatkan
   }
+  navPaint();
   if (!redirect) return;
   const cur = TABS.find(k => !$('p-' + k).hidden);
   if (cur && !menuOn(cur)) { selectTab(menuFirstTab()); return; }
   if (cur === 'dashboard' && !menuOn('dashboard.' + state.dashboardPage)) selectDashboardPage(menuFirstDash() || 'move');
   if (cur === 'set' && !menuOn('set.' + state.settingPage)) setSettingPage(menuFirstSet());
+  if (cur === 'wo' && !menuOn('wo.' + state.woPage)) selectWoPage(menuFirstWo());
 }
 
 // Ambil peta menu akun dari server. ADMINISTRATOR tidak perlu (selalu semua menu). Gagal / server lama: aturan terakhir tetap dipakai.
@@ -5044,8 +5140,12 @@ function setSettingPage(which) {
   $('set-global').hidden = which !== 'global';
   $('set-wilayah').hidden = which !== 'wilayah';
   $('set-enable-download').hidden = which !== 'enable-download';
+  $('set-write-off').hidden = which !== 'write-off';
+  $('set-manajemen').hidden = which !== 'manajemen';
   if (which === 'wilayah' && (!state.wilayah || (!wilayahIsDirty() && Date.now() - state.wilayahLoadedAt > 60000))) loadWilayah();
   if (which === 'enable-download') { paintImageDownloadSettings(); setNote('image-download-msg', ''); }
+  if (which === 'write-off') woSettingPaint();
+  if (which === 'manajemen') mgEnter();
 }
 
 function wilayahUserByNik(nik) {
@@ -5185,17 +5285,19 @@ async function saveWilayah() {
 }
 
 /* ---------------------------------------------------------------------
-   11C. Write Off: unggah data master, Eksekusi Writte Off, Approve Writte Off
+   11C. Write-Off: unggah data master, Eksekusi Write-Off, Approve Write-Off
    Server: WriteOff.gs (aksi webWo*). Hak akses, status ID_EWO, dan semua perhitungan DITEGAKKAN DI SERVER;
    bagian ini hanya membaca file, menampilkan data, dan mengirim isian pengguna.
    --------------------------------------------------------------------- */
-const WO_ST_CONFIRM = 'Confirm', WO_ST_APPROVE = 'Approve Writte Off', WO_BATAL = 'Batal', WO_VER_OK = 'Sesuai', WO_VER_NO = 'Tidak';
+const WO_ST_CONFIRM = 'Confirm', WO_ST_APPROVE = 'Approve Write-Off', WO_BATAL = 'Batal', WO_VER_OK = 'Sesuai', WO_VER_NO = 'Tidak';
 const WO_SHEET = { R: 'WO Reguler', K: 'WO Khusus' };
 const WO_CHUNK = 2000;        // baris per permintaan unggah master (batas server 2.500)
 const WO_PAGE = 50;           // baris per halaman di area kerja Eksekusi
 const WO_REF_MAX = 100;       // panjang maksimum No. THC / No. TAK / No JV (sama dengan server)
 const WO_HEADER_ROW = 3;      // header file master ada di baris Excel 3; data mulai baris 4
 const WO_EWO_RE = /EWO-[RK]-\d{4}-\d{9}/i;
+const WO_ALASAN_MAX = 200;    // panjang maksimum Alasan Batal (sama dengan server)
+const WO_BATAL_OPTIONS = ['Anggota sudah non-aktif', 'Masuk ke list WO lainnya', 'Anggota memiliki lebih dari 1 pinjaman'];   // pilihan ke-4 = Lainnya (teks bebas)
 
 // [judul di sheet, tipe (t teks, n angka, d periode), nama yang dikenali pada header Excel (huruf kecil tanpa tanda baca)].
 // 19 kolom pertama dibaca dari Excel; sisanya diisi di sistem. Urutan WAJIB sama dengan WO_COLS di WriteOff.gs.
@@ -5205,11 +5307,11 @@ const WO_COLS = [
   ['Total Balance', 'n', ['totalbalance']], ['Simp. Wajib', 'n', ['simpwajib']], ['Simp. Sukarela', 'n', ['simpsukarela']], ['Simp. Pensiun', 'n', ['simppensiun']],
   ['Simp. Hari Raya', 'n', ['simphariraya']], ['Simp. Khusus', 'n', ['simpkhusus']], ['Simp. Qurban', 'n', ['simpqurban']], ['Simp. Sipadan', 'n', ['simpsipadan']],
   ['Total Simpanan', 'n', ['totalsimpanan']], ['PIUTANG YANG DI WO', 'n', ['piutangyangdiwo']], ['Alasan diajukan WO', 't', ['alasandiajukanwo']],
-  ['Tahun', 'n'], ['No. THC', 't'], ['No. TAK', 't'], ['No JV', 't'], ['Verifikasi Nilai WO', 't'], ['ID_EWO', 't'], ['Status Baris', 't'],
+  ['Tahun', 'n'], ['No. THC', 't'], ['No. TAK', 't'], ['No JV', 't'], ['Verifikasi Nilai WO', 't'], ['ID_EWO', 't'], ['Status Baris', 't'], ['Alasan Batal', 't'],
 ];
 const WC = { NO: 0, BRANCH: 1, LOAN: 2, CTR: 3, CLIENT: 4, NAME: 5, PRODUCT: 6, PERIODE: 7, TB: 8, WAJIB: 9, SUKARELA: 10, PENSIUN: 11, HARIRAYA: 12, KHUSUS: 13,
-  QURBAN: 14, SIPADAN: 15, TOTSIMP: 16, PIUTANG: 17, ALASAN: 18, TAHUN: 19, THC: 20, TAK: 21, JV: 22, VERIF: 23, EWO: 24, STATUS: 25 };
-const WO_NIMPORT = 19, WO_NBASE = 24;   // kolom 1-19 dari Excel; 1-24 = struktur dokumen; 25-26 (ID_EWO, Status Baris) hanya sistem
+  QURBAN: 14, SIPADAN: 15, TOTSIMP: 16, PIUTANG: 17, ALASAN: 18, TAHUN: 19, THC: 20, TAK: 21, JV: 22, VERIF: 23, EWO: 24, STATUS: 25, ALASAN_BATAL: 26 };
+const WO_NIMPORT = 19, WO_NBASE = 24;   // kolom 1-19 dari Excel; 1-24 = struktur dokumen; 25-27 (ID_EWO, Status Baris, Alasan Batal) hanya sistem
 // Nominal yang bisa diubah lewat Manual: [nama parameter server, kolom]
 const WO_NOMINAL = [['tb', WC.TB], ['wajib', WC.WAJIB], ['sukarela', WC.SUKARELA], ['pensiun', WC.PENSIUN], ['hariraya', WC.HARIRAYA],
   ['khusus', WC.KHUSUS], ['qurban', WC.QURBAN], ['sipadan', WC.SIPADAN]];
@@ -5224,10 +5326,10 @@ const wo = {
   opt: null, ewos: [], optAt: 0, optLoading: false, pick: { b: '', j: '', y: '' }, busy: false,
   cur: null, rows: [], curAt: 0, q: '', page: 0,
   awo: null, awoAt: 0, awoLoading: false, awoJ: '', rep: null,
-  manual: null, auto: null, jvId: '', verifId: '', reopenId: '', det: null,
+  manual: null, auto: null, jvId: '', verifId: '', reopenId: '', det: null, batal: null, lastBackup: null, setBusy: false,
 };
 
-/* ---------- Unggah data master (ADMINISTRATOR, menu Unggah Excel) ---------- */
+/* ---------- Unggah data master (ADMINISTRATOR, menu Import Data) ---------- */
 
 // Murni: array baris Excel (indeks 0 = baris 1) -> data master. Dipisah dari pembacaan file agar bisa diuji tanpa pustaka Excel.
 function parseWoMaster(aoa, info) {
@@ -5301,7 +5403,7 @@ async function readWoExcel(file, info) {
 
 function renderWoPreview(d) {
   const chip = (text, warn) => h('span', { class: 'st' + (warn ? ' warn' : ''), text });
-  put($('upstats'), chip('DATA MASTER WRITE OFF'), chip(d.name), chip('Sheet: ' + d.sheet + ' · Tahun ' + d.tahun), chip(fmt(d.rows.length) + ' baris data'),
+  put($('upstats'), chip('DATA MASTER WRITE-OFF'), chip(d.name), chip('Sheet: ' + d.sheet + ' · Tahun ' + d.tahun), chip(fmt(d.rows.length) + ' baris data'),
     chip(fmt(d.branchCount) + ' cabang'), chip('Total Balance ' + rp(d.sumTb)), chip('PIUTANG YANG DI WO ' + rp(d.sumPiutang)),
     chip('Baris Excel ' + (WO_HEADER_ROW + 1) + '–' + d.lastRow + ' (No. terbesar ' + fmt(d.maxNo) + ')'),
     d.skipped ? chip(fmt(d.skipped) + ' baris kosong / tanpa Loan No dilewati', true) : null);
@@ -5359,8 +5461,8 @@ async function saveWoUpload() {
 function woReset() {
   wo.epoch++;
   Object.assign(wo, { opt: null, ewos: [], optAt: 0, optLoading: false, pick: { b: '', j: '', y: '' }, busy: false, cur: null, rows: [], curAt: 0, q: '', page: 0,
-    awo: null, awoAt: 0, awoLoading: false, awoJ: '', rep: woRepFresh(), rsb: rsbFresh(), manual: null, auto: null, jvId: '', verifId: '', reopenId: '', det: null });
-  ['wo-manual', 'wo-auto', 'wo-jv', 'wo-verif', 'wo-detail', 'wo-reopen', 'wo-ttd'].forEach(id => { const dlg = $(id); if (dlg && dlg.open) dlg.close(); });
+    awo: null, awoAt: 0, awoLoading: false, awoJ: '', rep: woRepFresh(), rsb: rsbFresh(), manual: null, auto: null, jvId: '', verifId: '', reopenId: '', det: null, batal: null, setBusy: false });
+  ['wo-manual', 'wo-auto', 'wo-jv', 'wo-verif', 'wo-detail', 'wo-reopen', 'wo-ttd', 'wo-batal', 'wo-clear'].forEach(id => { const dlg = $(id); if (dlg && dlg.open) dlg.close(); });
   $('ewo-work').hidden = true; $('ewo-hist-panel').hidden = true; $('ewo-q').value = '';
   ['ewo-branch', 'ewo-jenis', 'ewo-tahun', 'ewo-hist', 'ewo-tbl', 'awo-tbl', 'ewo-stats', 'ewo-pager'].forEach(id => $(id).replaceChildren());
   $('ewo-proses').disabled = true; $('ewo-refresh').disabled = false; $('awo-refresh').disabled = false;
@@ -5369,7 +5471,7 @@ function woReset() {
   setNote('ewo-note', ''); setNote('awo-note', '');
 }
 
-// Panggilan ke server Write Off. Hasil null = sesi berakhir (sudah diarahkan ke login) atau tampilan sudah diganti selama menunggu.
+// Panggilan ke server Write-Off. Hasil null = sesi berakhir (sudah diarahkan ke login) atau tampilan sudah diganti selama menunggu.
 async function woCall(action, data, opts) {
   const epoch = wo.epoch;
   const r = await api(action, Object.assign({ token: woTok() }, data), opts);
@@ -5404,7 +5506,7 @@ function woStatsOf(rows) {
 }
 const woBtn = (label, cls, act, extra) => h('button', Object.assign({ class: 'btn sm ' + cls, type: 'button', 'data-act': act, text: label }, extra || {}));
 
-/* ---------- Menu Eksekusi Writte Off: tahap A (filter + Proses Data) ---------- */
+/* ---------- Menu Eksekusi Write-Off: tahap A (filter + Proses Data) ---------- */
 
 function woEnter() {
   if (!state.user) return;
@@ -5420,7 +5522,7 @@ async function woLoadOptions() {
   const r = await woCall('webWoOptions', {}, { retry: true });
   wo.optLoading = false; $('ewo-refresh').disabled = false;
   if (!r) return;
-  if (!r.ok) return setNote('ewo-note', r.error || 'Gagal memuat pilihan Write Off.', 'bad');
+  if (!r.ok) return setNote('ewo-note', r.error || 'Gagal memuat pilihan Write-Off.', 'bad');
   wo.opt = r.options || []; wo.ewos = r.ewos || []; wo.optAt = Date.now();
   setNote('ewo-note', '');
   paintEwoFilters(); paintEwoHistory();
@@ -5468,17 +5570,17 @@ function paintEwoFilters() {
   if (wo.busy) return;
   if (wo.opt && !wo.opt.length && !wo.ewos.length) {
     const admin = state.user && state.user.tingkat === 'ADMINISTRATOR';
-    setNote('ewo-note', admin ? 'Belum ada data master Write Off. Unggah file "WO Reguler yyyy.xlsx" atau "WO Khusus yyyy.xlsx" di menu Unggah Excel.'
-      : state.user && state.user.tingkat === 'USER 3' ? 'Belum ada data Write Off pada cabang akun Anda' + (state.user.cabang ? ' (' + state.user.cabang + ')' : '') + '.'
-      : 'Belum ada data Write Off pada cabang di Wilayah Kerja akun Anda.');
+    setNote('ewo-note', admin ? 'Belum ada data master Write-Off. Unggah file "WO Reguler yyyy.xlsx" atau "WO Khusus yyyy.xlsx" di menu Import Data.'
+      : state.user && state.user.tingkat === 'USER 3' ? 'Belum ada data Write-Off pada cabang akun Anda' + (state.user.cabang ? ' (' + state.user.cabang + ')' : '') + '.'
+      : 'Belum ada data Write-Off pada cabang di Wilayah Kerja akun Anda.');
   } else if (o && o.blk) {
     // ID_EWO sebelumnya belum "Sesuai": ID_EWO baru belum boleh dibuat.
     setNote('ewo-note', 'Cabang ini sudah memiliki ' + o.blk.id + ' (status ' + o.blk.st + ', Verifikasi Nilai WO ' + (o.blk.ver ? '"' + o.blk.ver + '"' : 'belum diisi')
       + '). ID_EWO baru hanya dapat dibuat setelah Verifikasi Nilai WO ID_EWO sebelumnya berstatus "' + WO_VER_OK + '". Buka ID_EWO tersebut dari daftar di bawah.', 'bad');
   } else if (o && !o.n) {
     // Tidak ada data dengan "Verifikasi Nilai WO" dan "Status Baris" kosong: Proses Data gagal, ID_EWO tidak terbentuk.
-    setNote('ewo-note', 'Tidak ada data WO ' + (o.j === 'R' ? 'Reguler' : 'Khusus') + ' tahun ' + o.y + ' cabang ' + o.b + ' yang bisa di proses.'
-      + (o.k ? ' (semua ID_EWO sebelumnya sudah "' + WO_VER_OK + '")' : '') + '. Proses tidak dapat di teruskan.', 'bad');
+    setNote('ewo-note', 'Tidak ada data WO ' + (o.j === 'R' ? 'Reguler' : 'Khusus') + ' tahun ' + o.y + ' cabang ' + o.b + ' yang kolom "Verifikasi Nilai WO" dan "Status Baris"-nya masih kosong'
+      + (o.k ? ' (semua ID_EWO sebelumnya sudah "' + WO_VER_OK + '")' : '') + '. Input WO tidak dapat diproses dan ID_EWO tidak dibentuk.', 'bad');
   } else if (o) {
     setNote('ewo-note', fmt(o.n) + ' data WO ' + (o.j === 'R' ? 'Reguler' : 'Khusus') + ' tahun ' + o.y + ' cabang ' + o.b + ' siap diproses'
       + (o.k ? ' menjadi ID_EWO baru (ID_EWO sebelumnya: ' + fmt(o.k) + ', semuanya "' + WO_VER_OK + '").' : '.'));
@@ -5512,7 +5614,7 @@ function paintEwoHistory() {
 async function woProses() {
   const o = woPicked();
   if (!o || !o.ok || wo.busy) return;
-  const ok = await askConfirm('Proses data Write Off?',
+  const ok = await askConfirm('Proses data Write-Off?',
     'Cabang ' + o.b + ' · WO ' + (o.j === 'R' ? 'Reguler' : 'Khusus') + ' · Tahun ' + o.y + ' · ' + fmt(o.n) + ' data yang kolom "Verifikasi Nilai WO" dan "Status Baris"-nya masih kosong. '
     + 'Satu ID_EWO baru berstatus "Confirm" akan dibuat' + (o.k ? ' (ID_EWO sebelumnya untuk kombinasi ini tidak diubah)' : '') + '.',
     'Proses Data');
@@ -5558,7 +5660,7 @@ function woCloseWork() {
   paintEwoWork(); paintEwoHistory();
 }
 
-/* ---------- Eksekusi Writte Off: tahap B (area kerja) dan C (Eksekusi Data) ---------- */
+/* ---------- Eksekusi Write-Off: tahap B (area kerja) dan C (Eksekusi Data) ---------- */
 
 function paintEwoWork() {
   const c = wo.cur;
@@ -5583,7 +5685,7 @@ function paintEwoWork() {
   $('ewo-exec').disabled = !editable || s.n === 0;
   $('ewo-final-note').textContent = editable
     ? 'Setelah Eksekusi Data, status menjadi "' + WO_ST_APPROVE + '" dan data hanya bisa dilihat.' + (s.noThc || s.noTak ? ' Perhatian: ' + fmt(s.noThc) + ' data belum memiliki No. THC dan ' + fmt(s.noTak) + ' data belum memiliki No. TAK.' : '')
-    : 'Sudah dieksekusi' + (c.exAt ? ' pada ' + fmtStamp(c.exAt) : '') + (c.exBy ? ' oleh ' + c.exBy : '') + '. Menunggu Input JV dan Verifikasi Nilai WO di menu Approve Writte Off.';
+    : 'Sudah dieksekusi' + (c.exAt ? ' pada ' + fmtStamp(c.exAt) : '') + (c.exBy ? ' oleh ' + c.exBy : '') + '. Menunggu Input JV dan Verifikasi Nilai WO di menu Approve Write-Off.';
 }
 
 function woView() {
@@ -5636,22 +5738,70 @@ function woHistClick(e) {
   if (b && !b.disabled) woOpenEwo(b.dataset.id);
 }
 
+// Batal -> dialog Alasan Batal (woBatalSubmit); Pulihkan -> langsung (alasan dikosongkan server).
 async function woToggleBatal(loan, btn) {
   const row = woRowOf(loan);
   if (!row || !woEditable()) return;
-  const cancel = row[WC.STATUS] !== WO_BATAL;
-  if (cancel) {
-    const ok = await askConfirm('Batalkan data ini?', 'Loan No ' + loan + ' (' + row[WC.NAME] + ') tidak akan ikut dieksekusi dan tidak masuk file unduhan berikutnya. '
-      + 'Anda bisa memulihkannya selama status ID_EWO masih "' + WO_ST_CONFIRM + '".', 'Batalkan data');
-    if (!ok) return;
-  }
+  if (row[WC.STATUS] !== WO_BATAL) return woOpenBatal(loan);
   btn.disabled = true;
-  const r = await woCall('webWoBatalRow', { ewo: wo.cur.id, loan, batal: cancel ? '1' : '0' }, { timeoutMs: 90000 });
+  const r = await woCall('webWoBatalRow', { ewo: wo.cur.id, loan, batal: '0' }, { timeoutMs: 90000 });
   if (!r) return;
   if (!r.ok) { btn.disabled = false; return toast(r.error || 'Gagal mengubah status data.', true); }
   woReplaceRow(r.row); wo.cur = r.head; wo.curAt = Date.now();
   paintEwoWork();
-  toast(cancel ? 'Loan No ' + loan + ' dibatalkan.' : 'Loan No ' + loan + ' dipulihkan.');
+  toast('Loan No ' + loan + ' dipulihkan.');
+}
+
+/* ----- Dialog Alasan Batal ----- */
+
+function woOpenBatal(loan) {
+  const row = woRowOf(loan);
+  if (!row || !woEditable()) return;
+  wo.batal = { loan };
+  const opts = WO_BATAL_OPTIONS.concat(['Lainnya']);
+  put($('wb-form'),
+    h('h2', { id: 'wb-title', text: 'Alasan Batal' }),
+    h('p', { class: 'dlg-sub', text: wo.cur.id + ' · Loan No ' + loan + ' · ' + row[WC.NAME] }),
+    h('p', { class: 'wm-hint', text: 'Data ini tidak akan ikut dieksekusi dan tidak masuk file unduhan berikutnya. Pilih alasan pembatalan. Data bisa dipulihkan selama status ID_EWO masih "' + WO_ST_CONFIRM + '".' }),
+    h('fieldset', { class: 'wo-reasons' },
+      h('legend', { class: 'sr-only', text: 'Alasan batal' }),
+      ...opts.map((t, i) => h('label', { class: 'chk' }, h('input', { type: 'radio', name: 'wb-alasan', value: String(i) }), h('span', { text: (i + 1) + '. ' + t }))),
+      h('div', { class: 'wj-field', id: 'wb-other-wrap', hidden: true }, h('label', { for: 'wb-other', text: 'Alasan lainnya' }),
+        h('input', { id: 'wb-other', type: 'text', maxlength: String(WO_ALASAN_MAX), autocomplete: 'off', placeholder: 'Tulis alasan pembatalan' }))),
+    h('p', { class: 'wm-err', id: 'wb-err', role: 'alert' }),
+    h('div', { class: 'dlg-act' },
+      h('button', { class: 'btn ghost', type: 'button', onclick: () => $('wo-batal').close(), text: 'Kembali' }),
+      h('button', { class: 'btn fit', type: 'submit', id: 'wb-save', text: 'Batalkan data' })));
+  $('wb-form').querySelectorAll('input[name="wb-alasan"]').forEach(r => r.addEventListener('change', () => {
+    const other = r.value === String(WO_BATAL_OPTIONS.length) && r.checked;
+    $('wb-other-wrap').hidden = !other; $('wb-err').textContent = '';
+    if (other) $('wb-other').focus();
+  }));
+  $('wo-batal').showModal();
+}
+
+async function woBatalSubmit(ev) {
+  ev.preventDefault();
+  const b = wo.batal, err = $('wb-err'), save = $('wb-save');
+  if (!b || !save) return;
+  const picked = $('wb-form').querySelector('input[name="wb-alasan"]:checked');
+  let alasan = '', msg = '';
+  if (!picked) msg = 'Pilih salah satu alasan batal.';
+  else if (Number(picked.value) < WO_BATAL_OPTIONS.length) alasan = WO_BATAL_OPTIONS[Number(picked.value)];
+  else {
+    alasan = $('wb-other').value.replace(/\s+/g, ' ').trim();
+    msg = !alasan ? 'Alasan lainnya wajib diisi.' : alasan.length > WO_ALASAN_MAX ? 'Alasan maksimal ' + WO_ALASAN_MAX + ' karakter.' : /^[=+\-@]/.test(alasan) ? 'Alasan tidak boleh diawali tanda = + - atau @.' : '';
+  }
+  err.textContent = msg;
+  if (msg) return;
+  save.disabled = true;
+  const r = await woCall('webWoBatalRow', { ewo: wo.cur.id, loan: b.loan, batal: '1', alasan }, { timeoutMs: 90000 });
+  if (!r) return;
+  save.disabled = false;
+  if (!r.ok) { err.textContent = r.error || 'Gagal membatalkan data.'; return; }
+  woReplaceRow(r.row); wo.cur = r.head; wo.curAt = Date.now(); wo.batal = null;
+  $('wo-batal').close(); paintEwoWork();
+  toast('Loan No ' + b.loan + ' dibatalkan.');
 }
 
 /* ----- Manual ----- */
@@ -5906,7 +6056,7 @@ async function woExecute() {
   woLoadOptions();
 }
 
-/* ---------- Menu Approve Writte Off ---------- */
+/* ---------- Menu Approve Write-Off ---------- */
 
 function woEnterApprove() {
   if (!state.user) return;
@@ -5921,7 +6071,7 @@ async function woLoadApprove() {
   const r = await woCall('webWoApproveList', {}, { retry: true });
   wo.awoLoading = false; $('awo-refresh').disabled = false;
   if (!r) return;
-  if (!r.ok) return setNote('awo-note', r.error || 'Gagal memuat daftar Approve Writte Off.', 'bad');
+  if (!r.ok) return setNote('awo-note', r.error || 'Gagal memuat daftar Approve Write-Off.', 'bad');
   wo.awo = r.ewos || []; wo.awoAt = Date.now();
   paintApprove();
 }
@@ -6046,13 +6196,13 @@ function paintDetail(full) {
       h('button', { class: 'btn ghost sm', type: 'button', disabled: d.page >= pages - 1, onclick: go(1), text: 'Berikutnya' })) : null);
 }
 
-/* ----- Report Writte Off: seluruh data WO (termasuk Batal) + unduhan WO Sesuai Reguler / Khusus ----- */
+/* ----- Report Write-Off: seluruh data WO (termasuk Batal) + unduhan WO Sesuai Reguler / Khusus ----- */
 
 const WO_REP_CHUNK = 5000, WO_REP_MAX_AGE = 120000;   // baris per permintaan; umur data sebelum dimuat ulang otomatis saat menu dibuka (ms)
 const woRepFresh = () => ({ rows: [], at: 0, loaded: false, loading: false, dl: false, f: { j: '', st: '', y: '', b: '' }, q: '', page: 0 });
 if (!wo.rep) wo.rep = woRepFresh();
 
-// Status satu baris: Batal | Belum Diproses (belum masuk ID_EWO) | Confirm | Approve Writte Off | Sesuai (ID_EWO terverifikasi "Sesuai")
+// Status satu baris: Batal | Belum Diproses (belum masuk ID_EWO) | Confirm | Approve Write-Off | Sesuai (ID_EWO terverifikasi "Sesuai")
 function woRepState(r, e) {
   if (r[WC.STATUS] === WO_BATAL) return WO_BATAL;
   if (!r[WC.EWO] || !e) return 'Belum Diproses';
@@ -6093,7 +6243,7 @@ async function woLoadReport() {
         setNote('rwo-note', 'Memuat data WO ' + woJenisNama(code) + '… ' + fmt(off) + (isFinite(total) ? ' dari ' + fmt(total) : '') + ' data');
         const r = await woCall('webWoReport', { j: code, off, lim: WO_REP_CHUNK }, { retry: true, timeoutMs: 120000 });
         if (!r) { R.loading = false; woRepButtons(); return; }                 // sesi berakhir / koneksi gagal (sudah diberitahukan) / tampilan sudah diganti
-        if (!r.ok) throw new Error(r.error || 'Gagal memuat Report Writte Off.');
+        if (!r.ok) throw new Error(r.error || 'Gagal memuat Report Write-Off.');
         total = r.total;
         (r.ewos || []).forEach(e => { eMap[e.id] = e; });
         r.rows.forEach(row => { const key = code + '|' + row[WC.LOAN]; if (!seen[key]) { seen[key] = true; items.push({ j: code, r: row }); } });
@@ -6101,7 +6251,7 @@ async function woLoadReport() {
         off += r.rows.length;
       }
     }
-  } catch (e) { failed = e.message || 'Gagal memuat Report Writte Off.'; }
+  } catch (e) { failed = e.message || 'Gagal memuat Report Write-Off.'; }
   R.loading = false; $('rwo-refresh').disabled = false;
   if (wo.rep !== R) return;                                                   // logout / ganti akun selama memuat
   if (failed) { woRepButtons(); return setNote('rwo-note', failed + (R.loaded ? ' Data yang tampil adalah hasil pemuatan sebelumnya.' : ''), 'bad'); }
@@ -6192,9 +6342,10 @@ async function woRepDownload(kind) {
   R.dl = true; woRepButtons(); setNote('rwo-note', 'Menyiapkan file Excel…');
   try {
     await Promise.all([loadXLSX(), nextFrame()]);
-    // [judul, jenis (n = angka, z = format Excel), pengambil nilai]; sesuai = 25 kolom dokumen (sampai ID_EWO), tampilan = + Jenis WO & Status
+    // [judul, jenis (n = angka, z = format Excel), pengambil nilai]; sesuai = 25 kolom dokumen (sampai ID_EWO) + Alasan Batal, tampilan = + Jenis WO & Status
     const cols = (sesuai ? [] : [['Jenis WO', 't', x => woJenisNama(x.j)], ['Status', 't', x => x.st]])
-      .concat(WO_COLS.slice(0, WO_NBASE + 1).map((c, k) => [c[0], c[1] === 'n' ? (k === WC.NO || k === WC.TAHUN ? 'i' : 'n') : 't', x => x.r[k], k]));
+      .concat(WO_COLS.slice(0, WO_NBASE + 1).map((c, k) => [c[0], c[1] === 'n' ? (k === WC.NO || k === WC.TAHUN ? 'i' : 'n') : 't', x => x.r[k], k]))
+      .concat([['Alasan Batal', 't', x => x.r[WC.ALASAN_BATAL] || '', WC.ALASAN_BATAL]]);   // kolom terakhir, baik Unduh WO Sesuai maupun Unduh Data Yang Tampil
     const aoa = [cols.map(c => c[0])].concat(items.map(x => cols.map(c => { const v = c[2](x); return c[1] === 't' ? String(v) : (v === '' ? '' : Number(v)); })));
     const ws = XLSX.utils.aoa_to_sheet(aoa), L = k => XLSX.utils.encode_col(k);
     const isRef = c => c[3] === WC.THC || c[3] === WC.TAK || c[3] === WC.JV;
@@ -6240,7 +6391,7 @@ function woBindReport() {
   $('rwo-q').addEventListener('input', debounce(() => { wo.rep.q = $('rwo-q').value; wo.rep.page = 0; paintReport(); }, 150));
 }
 
-/* ----- Surat Berita Acara (menu Report Writte Off) -----
+/* ----- Surat Berita Acara (menu Report Write-Off) -----
    Daftar cabang yang punya ID_EWO "Sesuai": TTD MSA / TTD BM (unggah gambar), Generate (susun surat PDF di browser), dan tombol unduh per Jenis WO.
    Data surat, nama penanda tangan, dan gambar TTD datang dari server (webWoSuratList / webWoSuratTtd / webWoSuratData di WriteOff.gs);
    PDF disusun oleh surat-wo.js memakai surat-kop.js dan surat-font.js (dimuat sesuai kebutuhan, satu folder dengan index.html). */
@@ -6318,12 +6469,17 @@ function rsbTtdBtn(br, role) {
 }
 function rsbJenisCell(br) {
   const R = wo.rsb, shown = br.ewos.filter(e => e.state !== 'none');
-  if (!shown.length) return h('span', { class: 'rsb-none', text: 'Belum digenerate' });
-  return h('div', { class: 'rsb-dls' }, shown.map(e => {
+  const surat = !shown.length ? h('span', { class: 'rsb-none', text: 'Belum digenerate' }) : h('div', { class: 'rsb-dls' }, shown.map(e => {
     const label = rsbLabel(br, e), info = e.id + ' · ' + fmt(e.n) + ' data diproses, ' + fmt(e.nb) + ' dibatalkan · digenerate ' + fmtStamp(e.genAt) + (e.genBy ? ' oleh ' + e.genBy : '');
     if (e.state === 'ready') return h('button', { class: 'btn sm ghost', type: 'button', 'data-act': 'dl', 'data-id': e.id, disabled: !!R.busy[e.id], title: info, text: '↓ ' + label });
     return h('span', { class: 'wo-status is-muted rsb-stale', title: info + '. Data atau TTD berubah sejak digenerate.', text: label + ' · perlu generate ulang' });
   }));
+  // Jurnal: satu tombol per tahun (WO Reguler + WO Khusus cabang itu), tidak menunggu surat digenerate
+  const years = [...new Set(br.ewos.map(e => e.y))].sort((a, b) => b - a);
+  const jurnal = h('div', { class: 'rsb-dls rsb-jr' }, years.map(y => h('button', {
+    class: 'btn sm ghost rsb-jbtn', type: 'button', 'data-act': 'jurnal', 'data-b': br.b, 'data-y': String(y), disabled: !!R.busy[rsbJKey(br.b, y)],
+    title: 'Unduh Jurnal WO Reguler dan WO Khusus tahun ' + y + ' (ZIP, satu PDF per nomor transaksi)', text: '↓ Jurnal ' + y })));
+  return h('div', { class: 'rsb-cellstack' }, surat, jurnal);
 }
 
 function rsbPaint() {
@@ -6355,6 +6511,7 @@ function rsbClick(ev) {
   if (b.dataset.act === 'ttd') rsbOpenTtd(b.dataset.b, b.dataset.role);
   else if (b.dataset.act === 'gen') rsbGenerate(b.dataset.b);
   else if (b.dataset.act === 'dl') rsbDownload(b.dataset.id);
+  else if (b.dataset.act === 'jurnal') rsbJurnal(b.dataset.b, Number(b.dataset.y));
 }
 
 /* ----- TTD: unggah gambar -> dirapikan di browser (latar putih bersih, dipotong sebatas goresan, dikecilkan, JPEG) -> disimpan server ----- */
@@ -6545,7 +6702,49 @@ async function rsbDownload(id) {
   finally { if (wo.rsb === R) { R.busy[id] = false; rsbPaint(); } }
 }
 
-/* ----- Batalkan Verifikasi: ID_EWO "Sesuai" kembali ke Approve Writte Off yang belum diverifikasi ----- */
+/* ----- Jurnal Write-Off: satu ZIP "Jurnal [Tahun]" per cabang (WO Reguler + WO Khusus), satu PDF Journal Voucher per nomor transaksi -----
+   Nomor transaksi: WO Khusus = No JV, WO Reguler = No. TAK. Isi jurnal disusun server (webWoJurnalData); PDF dan ZIP disusun di browser (surat-wo.js). */
+
+const rsbJKey = (b, y) => 'J|' + b + '|' + y;
+// Nama berkas PDF = nomor transaksi. Karakter yang dilarang di nama berkas diganti "-"; nama kembar diberi (2), (3), ...
+function rsbJurnalFileName(no, used) {
+  let base = String(no == null ? '' : no).replace(/[\\/:*?"<>|\u0000-\u001F]+/g, '-').replace(/\s+/g, ' ').trim().replace(/[. ]+$/, '') || 'Jurnal';
+  base = base.slice(0, 120);
+  let name = base, n = 1;
+  while (used[name.toLowerCase()]) name = base + ' (' + (++n) + ')';
+  used[name.toLowerCase()] = true;
+  return name + '.pdf';
+}
+
+async function rsbJurnal(branch, year) {
+  const R = wo.rsb, key = rsbJKey(branch, year);
+  if (!R || R.busy[key] || !Number.isFinite(year)) return;
+  R.busy[key] = true; rsbPaint();
+  try {
+    setNote('rsb-note', 'Menyiapkan Jurnal ' + year + ' cabang ' + branch + '…');
+    await loadSuratWO();
+    const r = await woCall('webWoJurnalData', { b: branch, y: String(year) }, { retry: true, timeoutMs: 120000 });
+    if (wo.rsb !== R || !r) return;
+    if (!r.ok) throw new Error(r.error || 'Jurnal tidak dapat disiapkan.');
+    const files = [], used = Object.create(null), list = r.vouchers || [];
+    if (!list.length) throw new Error('Tidak ada jurnal untuk cabang ' + branch + ' tahun ' + year + '.');
+    for (let i = 0; i < list.length; i++) {
+      setNote('rsb-note', 'Membuat PDF jurnal ' + fmt(i + 1) + ' dari ' + fmt(list.length) + ' (' + list[i].no + ')…');
+      const pdf = await SuratWO.buildJurnal(list[i]);
+      files.push({ name: rsbJurnalFileName(list[i].no, used), bytes: pdf.bytes });
+      if (i % 5 === 4) await new Promise(ok => setTimeout(ok, 0));          // beri kesempatan layar menyegarkan teks progres
+      if (wo.rsb !== R) return;
+    }
+    const cab = String(r.cab || '').replace(/[\\/:*?"<>|\u0000-\u001F]+/g, ' ').replace(/\s+/g, ' ').trim();       // sudah Proper Case dari server
+    const name = 'Jurnal ' + year + (cab ? ' ' + cab : '') + '.zip';      // contoh: Jurnal 2026 Cikalong Kulon.zip
+    rsbSave(SuratWO.zip(files), name);
+    setNote('rsb-note', '"' + name + '" diunduh: ' + fmt(files.length) + ' PDF (' + fmt(list.filter(v => v.jenis === 'Reguler').length) + ' nomor TAK Reguler, '
+      + fmt(list.filter(v => v.jenis === 'Khusus').length) + ' nomor JV Khusus) cabang ' + r.b + '.', 'good');
+  } catch (err) { setNote('rsb-note', err.message || 'Gagal membuat jurnal.', 'bad'); }
+  finally { if (wo.rsb === R) { R.busy[key] = false; rsbPaint(); } }
+}
+
+/* ----- Batalkan Verifikasi: ID_EWO "Sesuai" kembali ke Approve Write-Off yang belum diverifikasi ----- */
 
 function woOpenReopen(id) {
   const e = woAwoOf(id);
@@ -6632,7 +6831,7 @@ function woOpenVerif(id) {
     h('p', { class: 'dlg-sub', text: 'Apakah nilai WO pada ID_EWO ini sudah sesuai?' }),
     h('dl', { class: 'wo-kv' }, kv('ID_EWO', id), kv('Cabang', e.b), kv('Jenis / Tahun', 'WO ' + e.jenis + ' · ' + e.y), kv('Data aktif', fmt(e.n)),
       kv('PIUTANG YANG DI WO', rp(e.total)), kv('No JV', e.jv || 'Belum diinput')),
-    h('p', { class: 'wm-hint', text: 'Sesuai: ID_EWO dinyatakan terverifikasi dan No JV terkunci (bisa dibuka lagi lewat Batalkan Verifikasi). Tidak: status kembali ke "' + WO_ST_CONFIRM + '" agar nilai bisa direvisi di menu Eksekusi Writte Off, lalu dieksekusi ulang.' }),
+    h('p', { class: 'wm-hint', text: 'Sesuai: ID_EWO dinyatakan terverifikasi dan No JV terkunci (bisa dibuka lagi lewat Batalkan Verifikasi). Tidak: status kembali ke "' + WO_ST_CONFIRM + '" agar nilai bisa direvisi di menu Eksekusi Write-Off, lalu dieksekusi ulang.' }),
     h('p', { class: 'wm-err', id: 'wv-err', role: 'alert' }),
     h('div', { class: 'wo-choice' },
       h('button', { class: 'btn fit', type: 'button', id: 'wv-ok', onclick: () => woVerify(WO_VER_OK), text: 'Sesuai' }),
@@ -6646,7 +6845,7 @@ async function woVerify(hasil) {
   if (!e) return;
   const ok = await askConfirm(hasil === WO_VER_OK ? 'Nyatakan nilai WO sesuai?' : 'Nyatakan nilai WO tidak sesuai?',
     hasil === WO_VER_OK ? id + ' akan terverifikasi "' + WO_VER_OK + '" dan No JV terkunci sampai verifikasi dibatalkan.'
-      : id + ' akan dikembalikan ke status "' + WO_ST_CONFIRM + '" supaya nilainya direvisi di menu Eksekusi Writte Off, lalu hilang dari daftar ini sampai dieksekusi ulang.',
+      : id + ' akan dikembalikan ke status "' + WO_ST_CONFIRM + '" supaya nilainya direvisi di menu Eksekusi Write-Off, lalu hilang dari daftar ini sampai dieksekusi ulang.',
     hasil === WO_VER_OK ? 'Ya, Sesuai' : 'Ya, Tidak Sesuai');
   if (!ok) return;
   const a = $('wv-ok'), b = $('wv-no'), err = $('wv-err');
@@ -6661,6 +6860,149 @@ async function woVerify(hasil) {
   wo.optAt = 0; wo.curAt = 0; wo.rsb.at = 0;
   $('wo-verif').close(); paintApprove();
   toast(hasil === WO_VER_OK ? id + ' terverifikasi "' + WO_VER_OK + '".' : id + ' dikembalikan ke status "' + WO_ST_CONFIRM + '".');
+}
+
+/* ----- Setting > Write-Off: Backup / Clear / Sinkron Backup (ADMINISTRATOR; server memeriksa ulang) ----- */
+
+const WOS_FORMAT = 'dashboard-write-off-backup', WOS_VERSION = 1, WOS_CLEAR_WORD = 'HAPUS';
+const WOS_SEND_ROWS = 2000, WOS_SEND_BYTES = 1500000;   // batas isi satu permintaan Sinkron Backup (baris / karakter)
+
+function woSettingPaint() {
+  const b = wo.lastBackup;
+  $('wos-last').textContent = b ? 'Backup terakhir pada sesi ini: ' + fmtStamp(b.at) + ' · ' + b.name + ' (' + fmt(b.rows) + ' baris di ' + b.tabs + ' sheet).' : 'Belum ada backup pada sesi ini.';
+  ['wos-backup', 'wos-clear', 'wos-restore'].forEach(id => { $(id).disabled = wo.setBusy; });
+}
+function woSettingBusy(on, text, tone) {
+  wo.setBusy = on; woSettingPaint();
+  if (text != null) setNote('wos-msg', text, tone);
+}
+const woStamp = () => { const d = new Date(); return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds()); };
+
+// Baca seluruh sheet Write-Off dari server (per sheet, per potongan). Mengembalikan { tabs: [{ name, head, rows }], total } atau null bila gagal / dibatalkan.
+async function woBackupRead(onStep) {
+  const tabs = [];
+  let count = 6, total = 0;
+  for (let t = 0; t < count; t++) {
+    let off = 0, grand = Infinity, tab = null;
+    while (off < grand) {
+      onStep('Membaca sheet ' + (tab ? tab.name : (t + 1) + '/' + count) + '… ' + fmt(off) + (isFinite(grand) ? ' dari ' + fmt(grand) : '') + ' baris');
+      const r = await woCall('webWoBackup', { t, off }, { retry: true, timeoutMs: 180000 });
+      if (!r) return null;
+      if (!r.ok) throw new Error(r.error || 'Gagal membaca data Write-Off.');
+      if (!tab) { tab = { name: r.name, head: r.head, exists: r.exists, rows: [] }; if (r.tabs) count = r.tabs.length; }
+      grand = r.total;
+      if (!r.rows.length) break;
+      for (const row of r.rows) tab.rows.push(row);
+      off += r.rows.length;
+    }
+    if (isFinite(grand) && tab.rows.length !== grand) throw new Error('Jumlah baris sheet ' + tab.name + ' tidak sesuai (terbaca ' + tab.rows.length + ' dari ' + grand + '). Coba lagi.');
+    tabs.push(tab);
+    total += tab.rows.length;
+  }
+  return { tabs, total };
+}
+
+async function woSettingBackup() {
+  if (wo.setBusy) return;
+  woSettingBusy(true, 'Menyiapkan backup…');
+  try {
+    const data = await woBackupRead(t => setNote('wos-msg', t));
+    if (!data) return woSettingBusy(false);
+    const u = state.user || {};
+    const file = { format: WOS_FORMAT, version: WOS_VERSION, createdAt: new Date().toISOString(), createdBy: { nik: u.nik || '', nama: u.nama || '' },
+      counts: Object.fromEntries(data.tabs.map(t => [t.name, t.rows.length])), tabs: data.tabs.map(t => ({ name: t.name, head: t.head, rows: t.rows })) };
+    const name = 'Backup Write-Off ' + woStamp() + '.json';
+    const url = URL.createObjectURL(new Blob([JSON.stringify(file)], { type: 'application/json' })), a = h('a', { href: url, download: name });
+    document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+    wo.lastBackup = { at: new Date().toISOString(), name, rows: data.total, tabs: data.tabs.length };
+    woSettingBusy(false, 'Backup selesai: "' + name + '" berisi ' + fmt(data.total) + ' baris dari ' + data.tabs.length + ' sheet (' + data.tabs.map(t => t.name + ' ' + fmt(t.rows.length)).join(', ') + ').', 'good');
+    toast('Backup Write-Off berhasil dibuat.');
+  } catch (e) { woSettingBusy(false, e.message || 'Backup gagal.', 'bad'); }
+}
+
+function woOpenClear() {
+  if (wo.setBusy) return;
+  put($('wc-form'),
+    h('h2', { id: 'wc-title', text: 'Clear data Write-Off?' }),
+    h('p', { class: 'wm-hint', text: 'Seluruh isi data Write-Off (WO Reguler, WO Khusus, EWO, EWO_Log, EWO_TTD, EWO_Surat) di Google Sheet dan cache layar akan dihapus. Tab dan header sheet tetap ada. '
+      + 'Penghapusan tidak dapat dibatalkan, kecuali Anda punya file backup untuk Sinkron Backup.' + (wo.lastBackup ? '' : ' Pada sesi ini Anda BELUM membuat backup.') }),
+    h('div', { class: 'wj-field' }, h('label', { for: 'wc-word', text: 'Ketik ' + WOS_CLEAR_WORD + ' untuk melanjutkan' }),
+      h('input', { id: 'wc-word', type: 'text', autocomplete: 'off', spellcheck: 'false' })),
+    h('p', { class: 'wm-err', id: 'wc-err', role: 'alert' }),
+    h('div', { class: 'dlg-act' },
+      h('button', { class: 'btn ghost', type: 'button', onclick: () => $('wo-clear').close(), text: 'Kembali' }),
+      h('button', { class: 'btn danger', type: 'submit', id: 'wc-go', text: 'Clear sekarang' })));
+  $('wo-clear').showModal();
+  $('wc-word').focus();
+}
+
+async function woClearSubmit(ev) {
+  ev.preventDefault();
+  const word = $('wc-word').value.trim();
+  if (word !== WOS_CLEAR_WORD) { $('wc-err').textContent = 'Ketik ' + WOS_CLEAR_WORD + ' (huruf besar) untuk melanjutkan.'; return $('wc-word').focus(); }
+  $('wo-clear').close();
+  woSettingBusy(true, 'Membersihkan data Write-Off…');
+  const r = await woCall('webWoClear', { confirm: word }, { timeoutMs: 180000 });
+  if (!r) return woSettingBusy(false);
+  if (!r.ok) return woSettingBusy(false, r.error || 'Clear gagal.', 'bad');
+  const n = (r.tabs || []).reduce((a, t) => a + t.cleared, 0);
+  woReset();                              // cache layar (pilihan filter, daftar ID_EWO, data yang sedang dibuka, Report, Surat) ikut bersih
+  woSettingBusy(false, 'Clear selesai: ' + fmt(n) + ' baris dihapus dari ' + (r.tabs || []).filter(t => t.exists).length + ' sheet, termasuk log. Tab dan header sheet tetap ada.', 'good');
+  toast('Data Write-Off dibersihkan.');
+}
+
+// Validasi isi file backup di sisi klien (server memeriksa lagi tiap baris). Mengembalikan teks galat atau ''.
+function woRestoreCheck(f) {
+  if (!f || typeof f !== 'object' || f.format !== WOS_FORMAT) return 'Ini bukan file backup Write-Off dari aplikasi ini.';
+  if (f.version !== WOS_VERSION) return 'Versi file backup (' + f.version + ') tidak dikenali.';
+  if (!Array.isArray(f.tabs) || !f.tabs.length) return 'File backup tidak memuat sheet.';
+  for (const t of f.tabs) {
+    if (!t || typeof t.name !== 'string' || !Array.isArray(t.head) || !Array.isArray(t.rows)) return 'Struktur sheet pada file backup tidak lengkap.';
+    if (f.counts && Number.isInteger(f.counts[t.name]) && f.counts[t.name] !== t.rows.length) return 'Jumlah baris sheet "' + t.name + '" tidak cocok dengan catatan di file (file rusak atau terpotong).';
+  }
+  return '';
+}
+
+async function woSettingRestoreFile(file) {
+  if (!file || wo.setBusy) return;
+  let data;
+  try { data = JSON.parse(await file.text()); } catch (e) { return setNote('wos-msg', 'File tidak dapat dibaca sebagai JSON.', 'bad'); }
+  const bad = woRestoreCheck(data);
+  if (bad) return setNote('wos-msg', bad, 'bad');
+  const total = data.tabs.reduce((a, t) => a + t.rows.length, 0);
+  const ok = await askConfirm('Sinkron Backup?', 'File "' + file.name + '" (dibuat ' + (data.createdAt ? fmtStamp(data.createdAt) : '—') + ') berisi ' + fmt(total) + ' baris dari ' + data.tabs.length
+    + ' sheet. Isi sheet Write-Off yang ada sekarang akan DIGANTI dengan isi file ini.', 'Ya, sinkronkan');
+  if (!ok) return;
+  woSettingBusy(true, 'Memulihkan data Write-Off…');
+  try {
+    const known = ['WO Reguler', 'WO Khusus', 'EWO', 'EWO_Log', 'EWO_TTD', 'EWO_Surat'];
+    let written = 0;
+    for (const tab of data.tabs) {
+      const t = known.indexOf(tab.name);
+      if (t < 0) throw new Error('Sheet "' + tab.name + '" pada file backup tidak dikenali.');
+      let i = 0, first = true;
+      while (first || i < tab.rows.length) {
+        let n = 0, size = 0;
+        while (i + n < tab.rows.length && n < WOS_SEND_ROWS && (n === 0 || size + JSON.stringify(tab.rows[i + n]).length <= WOS_SEND_BYTES)) { size += JSON.stringify(tab.rows[i + n]).length; n++; }
+        setNote('wos-msg', 'Memulihkan sheet ' + tab.name + '… ' + fmt(i) + ' dari ' + fmt(tab.rows.length) + ' baris');
+        const r = await woCall('webWoRestore', { t, start: first ? '1' : '0', offset: i, rows: JSON.stringify(tab.rows.slice(i, i + n)) }, { timeoutMs: 180000 });
+        if (!r) return woSettingBusy(false);
+        if (!r.ok) throw new Error((r.error || 'Sinkron Backup gagal.') + ' Sheet "' + tab.name + '" mungkin baru terisi sebagian; ulangi Sinkron Backup dengan file yang sama.');
+        written += r.written; i += n; first = false;
+      }
+    }
+    woReset();
+    woSettingBusy(false, 'Sinkron Backup selesai: ' + fmt(written) + ' baris dipulihkan ke ' + data.tabs.length + ' sheet.', 'good');
+    toast('Data Write-Off dipulihkan dari backup.');
+  } catch (e) { woSettingBusy(false, e.message || 'Sinkron Backup gagal.', 'bad'); }
+}
+
+function woBindSetting() {
+  $('wos-backup').onclick = woSettingBackup;
+  $('wos-clear').onclick = woOpenClear;
+  $('wos-restore').onclick = () => { if (!wo.setBusy) { $('wos-file').value = ''; $('wos-file').click(); } };
+  $('wos-file').addEventListener('change', () => woSettingRestoreFile($('wos-file').files[0]));
+  $('wc-form').addEventListener('submit', woClearSubmit);
 }
 
 function bindWriteOff() {
@@ -6679,6 +7021,8 @@ function bindWriteOff() {
   $('awo-refresh').onclick = () => { wo.awoAt = 0; woLoadApprove(); };
   woBindReport();
   $('wr-form').addEventListener('submit', woReopenSubmit);
+  $('wb-form').addEventListener('submit', woBatalSubmit);
+  woBindSetting();
   $('awo-jenis').addEventListener('change', () => { wo.awoJ = $('awo-jenis').value; paintApprove(); });
   $('awo-tbl').addEventListener('click', woApproveClick);
 }
@@ -6702,8 +7046,8 @@ function bind() {
   $('out').onclick = () => logout();
 
   // Tab (dengan panah kiri/kanan)
-  TABS.forEach(k => { $('t-' + k).onclick = () => selectTab(k); });
-  document.querySelectorAll('[data-dashpage]').forEach(b => b.addEventListener('click', () => selectDashboardPage(b.dataset.dashpage)));
+  TABS.forEach(k => { $('t-' + k).onclick = NAV_GROUPS.indexOf(k) > -1 ? () => navParentClick(k) : () => selectTab(k); });
+  bindNavGroups();
   const versionSearch = $('version-q');
   if (versionSearch) versionSearch.addEventListener('input', () => {
     const q = versionSearch.value.trim().toLocaleLowerCase('id');
@@ -6716,13 +7060,14 @@ function bind() {
     $('version-empty').hidden = visible !== 0;
   });
   $('app').querySelector('.tabs').addEventListener('keydown', e => {
+    if (!e.target.classList || !e.target.classList.contains('tab')) return;
     const vis = TABS.filter(k => !$('t-' + k).hidden), i = vis.findIndex(k => $('t-' + k).getAttribute('aria-selected') === 'true');
     const to = e.key === 'ArrowRight' ? vis[(i + 1) % vis.length] : e.key === 'ArrowLeft' ? vis[(i - 1 + vis.length) % vis.length]
       : e.key === 'Home' ? vis[0] : e.key === 'End' ? vis[vis.length - 1] : null;
     if (to) { e.preventDefault(); selectTab(to, true); }
   });
 
-  // Write Off: Eksekusi & Approve
+  // Write-Off: Eksekusi & Approve
   bindWriteOff();
 
   // Dashboard: Rekening Bergerak
@@ -6838,7 +7183,6 @@ function bind() {
     setNote('image-download-msg', '');
   });
   $('wjlist').addEventListener('change', () => { state.wjDirty = !!state.data && wajibChecked() !== state.data.wajib; setNote('wjmsg', ''); syncWajibForm(); });
-  document.querySelectorAll('[data-setpage]').forEach(b => b.addEventListener('click', () => setSettingPage(b.dataset.setpage)));
   $('wilayah-user-q').addEventListener('input', debounce(renderWilayahUsers, 120));
   $('wilayah-branch-q').addEventListener('input', debounce(renderWilayahEditor, 120));
   $('wilayah-all').onclick = () => setWilayahAll(true);

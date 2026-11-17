@@ -1184,7 +1184,7 @@ th.num .th{flex-direction:row-reverse}
 .kb-achv-bar{height:9px;border-radius:999px;background:rgba(255,255,255,.24);overflow:hidden}
 .kb-achv-bar i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#fff,#f6e27a)}
 
-/* ---------- Write Off: Eksekusi & Approve Writte Off ---------- */
+/* ---------- Write-Off: Eksekusi & Approve Write-Off ---------- */
 .wo-panel{margin:0 0 16px;padding:18px 20px;border:1px solid var(--line);border-radius:16px;background:#fff}
 .wo-panel-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px 20px;flex-wrap:wrap;margin-bottom:14px}
 .wo-panel-head>div:first-child{flex:1 1 280px;min-width:0}
@@ -1285,7 +1285,7 @@ th.num .th{flex-direction:row-reverse}
 @media (max-width:760px){
   .tab-long{display:none}
   .tab-short{display:inline}
-  /* Tabel Write Off menjadi kartu di layar kecil: tombol aksi tidak tersembunyi di sisi kanan */
+  /* Tabel Write-Off menjadi kartu di layar kecil: tombol aksi tidak tersembunyi di sisi kanan */
   .wo-tw{border:0;max-height:none!important;overflow:visible;background:none}
   .wo-cards,.wo-cards tbody{display:block}
   .wo-cards thead{display:none}
@@ -1340,7 +1340,7 @@ th.num .th{flex-direction:row-reverse}
   .wo-det tfoot td.num::before{content:attr(data-label);display:block;font-size:11px;font-weight:500;color:var(--mute)}
 }
 
-/* Menu Report Writte Off */
+/* Menu Report Write-Off */
 .rwo-actions{display:flex;flex-wrap:wrap;gap:10px}
 .rwo-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 14px;margin:12px 0}
 .rwo-det .wo-status{white-space:nowrap}
@@ -1348,7 +1348,7 @@ th.num .th{flex-direction:row-reverse}
 @media (max-width:900px){.rwo-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:520px){.rwo-actions .btn{width:100%}}
 
-/* Surat Berita Acara (menu Report Writte Off) */
+/* Surat Berita Acara (menu Report Write-Off) */
 #rsb-wrap{max-height:min(calc(52 * var(--vh)),460px)}
 .rsb-count{font-size:12.5px;color:var(--mute);font-weight:600}
 .rsb-staff{margin-top:3px;font-size:12px;font-weight:400;color:var(--mute);line-height:1.5}
@@ -1357,6 +1357,8 @@ th.num .th{flex-direction:row-reverse}
 .rsb-dls{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .rsb-none{color:var(--mute);font-size:12.5px}
 .rsb-stale{white-space:nowrap}
+.rsb-cellstack{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.rsb-jr{padding-top:8px;border-top:1px dashed var(--line,#d9e2dc);width:100%}
 #rsb-tbl td{vertical-align:middle}
 .wt-pick{margin-top:14px}
 .wt-pick label{display:block;font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--mute);margin-bottom:6px}
@@ -1412,4 +1414,37 @@ th.num .th{flex-direction:row-reverse}
   .mg-tbl th.mg-menu{min-width:150px}
   .mg-state{display:none}
   .mg-actions .btn{flex:1 1 100%}
+}
+
+/* Setting > Write-Off (Backup / Clear / Sinkron Backup) dan dialog Alasan Batal */
+.wo-setact{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:14px 0 6px}
+.wo-setitem{display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:14px;border:1px solid var(--line,#e2e8f0);border-radius:14px;background:var(--surface-soft,#f8faf9)}
+.wo-setitem small{color:var(--mute);font-size:12.5px;line-height:1.45}
+.wo-reasons{border:0;margin:12px 0 0;padding:0;display:grid;gap:8px}
+.wo-reasons label.chk{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1.5px solid var(--line,#e2e8f0);border-radius:12px;cursor:pointer;font-size:14px}
+.wo-reasons label.chk:has(input:checked){border-color:var(--emerald,#0f7a5a);background:var(--surface-soft,#f1faf6)}
+.wo-reasons input[type=radio]{margin-top:3px;flex:none}
+.wo-reasons .wj-field{margin-top:4px;margin-left:26px}
+/* Tombol Backup / Clear / Sinkron Backup: ukuran sama (lebar penuh kartu, tinggi sama) */
+.wo-setitem .btn{width:100%;min-width:0;height:46px;min-height:46px;padding:0 16px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;font-size:15px;line-height:1}
+
+/* ===== Sub menu di sidebar (accordion): Dashboard, Write-Off, Setting ===== */
+.tab{position:relative}
+.tab-caret{margin-left:auto;display:grid;place-items:center;width:18px;height:18px;flex:none;color:var(--mute);transition:transform .18s}
+.tab-caret svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.tab[aria-expanded=true] .tab-caret{transform:rotate(180deg);color:var(--em-d)}
+.tab-sub{display:flex;flex-direction:column;gap:2px;margin:-3px 0 3px 25px;padding:2px 0 2px 10px;border-left:1.5px solid var(--line-2)}
+.tab-sub[hidden]{display:none}
+.tab-sub-item{display:block;width:100%;min-height:36px;padding:0 12px;border:0;border-radius:9px;background:none;color:var(--mute);font:inherit;font-size:13px;font-weight:600;text-align:left;cursor:pointer;white-space:nowrap}
+.tab-sub-item[hidden]{display:none}
+.tab-sub-item:hover,.tab-sub-item:focus-visible{background:#edf7f1;color:var(--em-d);outline:0}
+.tab-sub-item[aria-pressed=true]{background:var(--em-l);color:var(--em-dd);font-weight:700}
+.mg-title{margin:0 0 4px;font-size:22px;line-height:1.2;color:var(--ink)}
+@media(max-width:760px){
+  /* HP: sub menu = kotak di atas bilah navigasi bawah (dipindah ke luar <nav> oleh JS) */
+  .tab-sub{position:fixed;z-index:80;min-width:208px;margin:0;padding:6px;gap:2px;background:#fff;border:1px solid var(--line-2);border-radius:14px;box-shadow:0 14px 36px rgba(6,78,59,.18)}
+  .tab-sub-item{min-height:42px;padding:0 14px;font-size:13.5px;color:var(--ink)}
+  .tab-caret{position:absolute;top:4px;right:6px;width:14px;height:14px;margin:0;transform:rotate(180deg)}
+  .tab-caret svg{width:13px;height:13px}
+  .tab[aria-expanded=true] .tab-caret{transform:none}
 }
