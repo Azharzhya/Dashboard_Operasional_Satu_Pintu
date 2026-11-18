@@ -219,6 +219,11 @@ async function api(action, data, opts) {
       let json;
       try { json = JSON.parse(text); } catch (e) { return fail('Balasan server tidak terbaca. Coba lagi sebentar lagi.'); }
       if (opts && opts.onDone) opts.onDone({ wait: tHead - t0, download: tBody - tHead, bytes: got || text.length });
+      // Pengalihan Google kadang membuat satu POST sampai ke server sebagai GET: doGet hanya menjawab pesan ini dan TIDAK menjalankan aksi,
+      // jadi aman diulang sekali (juga untuk aksi tulis).
+      if (attempt === 0 && json && json.error === 'Metode tidak didukung, gunakan POST.') { await sleep(800); continue; }
+      // Server menolak karena menu itu disembunyikan untuk akun ini (Manajemen): sinkronkan sidebar dan hentikan tampilan datanya.
+      if (json && json.code === 'MENU_HIDDEN') menuRefresh(true);
       // Kode.gs lama menjawab aksi web yang tidak dikenal dengan pesan login ini
       if (action !== 'webLogin' && json && json.error === 'NIK dan Password wajib diisi.') return fail(MSG_ROUTING);
       return json;
@@ -724,6 +729,7 @@ function skeletonCards() {
 // Memuat data. Cache lokal hanya dipakai setelah server mengonfirmasi bahwa versi dan ruang lingkup akses masih sama.
 async function loadDash(options) {
   if (state.loading) return;
+  if (!menuOn('dashboard.dash') && !menuOn('dashboard.sum') && !menuOn('set.global')) return;   // menu disembunyikan: server juga menolak
   const automatic = !!(options && options.automatic);
   const hadData = !!state.data;
   if (automatic) setSync('Memeriksa perubahan Wilayah Kerja…', 'busy');
@@ -1405,6 +1411,23 @@ function upFail(r, sent) {
   setNote('upmsg', (r.error || 'Gagal memproses data.') + stagedNote, 'bad');
 }
 
+// Pemeriksaan dan penyimpanan di server dirancang agar aman dilanjutkan (offset tetap, satu proses pada satu waktu karena ada kunci).
+// Gangguan sesaat (timeout, server sibuk, jaringan putus) karena itu dilanjutkan otomatis beberapa kali, tidak perlu menekan tombol ulang.
+const UP_AUTO_RETRY = 4;
+const upTransient = r => !r.ok && ['SESSION_REQUIRED', 'SNAPSHOT_CHANGED', 'RECHECK_REQUIRED', 'COMMIT_PENDING', 'UPLOAD_ACTIVE'].indexOf(r.code) < 0
+  && (r.code === 'CHECK_RETRY' || r.code === 'COMMIT_RETRY' || /terlalu lama|tidak bisa terhubung|sibuk|tidak terbaca|Metode tidak didukung/i.test(r.error || ''));
+async function upCall(action, data, opts, label) {
+  let r;
+  for (let t = 0; t <= UP_AUTO_RETRY; t++) {
+    r = await api(action, data, opts);
+    if (r.ok || !upTransient(r)) return r;
+    if (t === UP_AUTO_RETRY) break;
+    setNote('upmsg', label + ' terputus sementara. Melanjutkan otomatis (' + (t + 1) + ' dari ' + UP_AUTO_RETRY + ')…');
+    await sleep(3000 * (t + 1));
+  }
+  return r;
+}
+
 async function stageAndCheck() {
   if (!pending || (!Array.isArray(pending.rows) && !pending.uploadId)) return;
   const total = Number(pending.totalRows || (pending.rows && pending.rows.length) || 0);
@@ -1412,6 +1435,7 @@ async function stageAndCheck() {
   const tok = (session.get() || {}).token;
   let id = pending.uploadId || '';
   let sent = 0;
+  const tStart = performance.now();
 
   $('upgo').disabled = true; upBar(0);
   // Endpoint Start akan mengembalikan sesi lama yang cocok (termasuk sesi v20.16 tanpa clientKey),
@@ -1459,14 +1483,15 @@ async function stageAndCheck() {
   setNote('upmsg', 'Membandingkan seluruh LOAN NO dengan Data_Upload…');
   // Pemeriksaan server dijalankan per batch. Setiap permintaan menyimpan checkpoint sehingga
   // tombol ulang melanjutkan offset terakhir, bukan mengunggah ulang 20 ribu baris.
-  let r = await api('webUploadCheck', { token: tok, uploadId: id, total }, { timeoutMs: 120000 });
+  const tCheck = performance.now();
+  let r = await upCall('webUploadCheck', { token: tok, uploadId: id, total }, { timeoutMs: 340000 }, 'Pemeriksaan');
   let guard = 0;
   while (r.ok && r.checking && guard++ < 200) {
     const pct = Math.max(0, Math.min(1, Number(r.progress || 0)));
     upBar(pct);
     setNote('upmsg', (r.message || 'Pemeriksaan Total Balance berjalan…') + ' ' + fmt(r.checkedRows || 0) + ' dari ' + fmt(r.totalRows || total) + ' baris.');
     await nextFrame();
-    r = await api('webUploadCheck', { token: tok, uploadId: id, total }, { timeoutMs: 120000 });
+    r = await upCall('webUploadCheck', { token: tok, uploadId: id, total }, { timeoutMs: 340000 }, 'Pemeriksaan');
   }
   if (!r.ok) {
     pending.uploadId = id; pending.totalRows = total; pending.sentRows = total;
@@ -1478,6 +1503,8 @@ async function stageAndCheck() {
   }
   pending.uploadId = id; pending.totalRows = total; pending.sentRows = total;
   pending.checked = true; pending.compare = r.compare || {};
+  console.info('Waktu unggah (dtk): kirim ' + ((tCheck - tStart) / 1000).toFixed(1) + ', periksa ' + ((performance.now() - tCheck) / 1000).toFixed(1));
+  pending.timeText = 'Waktu: kirim data ' + secs(tCheck - tStart) + ', pemeriksaan ' + secs(performance.now() - tCheck) + '.';
   pending.rows = null; // file sudah aman di sheet staging; bebaskan memori browser
   renderUploadCompare(pending.compare);
   upBar(null);
@@ -1501,7 +1528,9 @@ async function commitUpload() {
     ? 'Menyimpan file sebagai baseline awal dan memperbarui Data_Upload…'
     : 'Menyimpan PAR Baru dan PAR Selesai, lalu memperbarui Data_Upload…');
   const tok = (session.get() || {}).token;
-  const r = await api('webUploadCommit', { token: tok, uploadId: pending.uploadId }, { timeoutMs: 300000 });
+  const tCommit = performance.now();
+  const r = await upCall('webUploadCommit', { token: tok, uploadId: pending.uploadId }, { timeoutMs: 340000 }, 'Penyimpanan');
+  if (r.timing) console.info('Waktu simpan di server (ms):', r.timing);
   if (!r.ok) {
     upBar(null); $('upgo').disabled = false;
     $('upgo').textContent = 'Ulangi Konfirmasi & Upload';
@@ -1511,6 +1540,11 @@ async function commitUpload() {
   setNote('upmsg', r.initialBaseline || baseline
     ? 'Baseline awal berhasil disimpan. Data_Upload: ' + fmt(r.rows) + ' baris. PAR Baru: 0 · PAR Selesai: 0 · Rekening Bergerak: 0. File ini sekarang menjadi pembanding untuk seluruh unggahan berikutnya.'
     : 'Selesai. Data_Upload: ' + fmt(r.rows) + ' baris · PAR Baru: ' + fmt(r.newCount || c.newCount || 0) + ' baris · PAR Selesai: ' + fmt(r.doneCount || c.doneCount || 0) + ' baris · Tanggal Progress: ' + (r.progressDate || c.progressDate || '-') + '.', 'good');
+  {   // rincian waktu: membantu mencari langkah yang paling lama (angka server juga ada di Console browser dan log eksekusi Apps Script)
+    const parts = r.timing ? Object.keys(r.timing).filter(k => k !== 'total' && r.timing[k] >= 1000).sort((a, b) => r.timing[b] - r.timing[a]).slice(0, 4).map(k => k + ' ' + secs(r.timing[k])) : [];
+    const el = $('upmsg');
+    if (el && (pending.timeText || parts.length)) el.textContent += ' ' + (pending.timeText || '') + ' Penyimpanan ' + secs(performance.now() - tCommit) + (parts.length ? ' (terlama: ' + parts.join(', ') + ')' : '') + '.';
+  }
   toast(r.initialBaseline || baseline ? 'Baseline awal berhasil disimpan.' : 'Pemeriksaan dan unggah Excel berhasil. Dashboard dimuat ulang.');
   // Unggahan mengubah arsip dan Data_Upload; batalkan data sub-dashboard yang tersimpan di memori.
   state.progress = null; state.progressLoadedAt = 0;
@@ -3698,6 +3732,7 @@ function paintRekeningBergerak(data) {
 
 async function loadRekeningBergerak(options) {
   if (state.rekeningLoading || !state.user) return;
+  if (!menuOn('dashboard.move') && !menuOn('dashboard.sum')) return;
   state.rekeningLoading = true;
   $('rb-ref').disabled = true;
   $('rb-xlsx').disabled = true; $('rb-img').disabled = true;
@@ -4871,7 +4906,7 @@ function paintPola() {
   syncPolaForm();
 }
 async function loadPola() {
-  if (state.polaLoading || !state.user) return;
+  if (state.polaLoading || !state.user || !menuOn('set.global')) return;
   state.polaLoading = true;
   try {
     const r = await api('webGetPolaHitung', { token: (session.get() || {}).token }, { retry: true });
@@ -4928,6 +4963,20 @@ function menuOn(key) {
   if (key === 'wo' && (has('ewo') || has('awo') || has('rwo'))) return WO_PAGES.some(k => menuOn('wo.' + k));
   return menuLegacy(key, u);
 }
+// Menu yang disembunyikan = isinya ikut dibuang dari memori halaman dan cache perangkat (server juga menolak permintaannya).
+function menuDropHiddenData() {
+  if (!state.user || state.user.tingkat === 'ADMINISTRATOR') return;
+  const sum = menuOn('dashboard.sum');
+  if (!menuOn('dashboard.dash') && !sum && state.data && state.data.rows && state.data.rows.length) {
+    state.data = null; state.byCat = {}; state.groups = {}; state.branches = new Map(); state.clientIdCounts = new Map();
+    cache.clear(); clearDash();
+    if (menuOn('set.global')) loadDash();            // Setting tetap memerlukan nilai pengaturan (tanpa baris data)
+  }
+  if (!menuOn('dashboard.move') && !sum && state.rekening) { state.rekening = null; state.rekeningLoadedAt = 0; }
+  if (!menuOn('dashboard.progress') && !sum && state.progress) { state.progress = null; state.progressLoadedAt = 0; state.progressDetailResult = null; state.progressDetailCache.clear(); }
+  if (!menuOn('dashboard.analisa') && !sum && state.analisaCabang) { state.analisaCabang = null; state.analisaLoadedAt = 0; }
+  if (!sum && state.kb && (state.kb.tool || state.kb.rekening || state.kb.analisa || Object.keys(state.kb.progress || {}).length)) resetKabarBerita();
+}
 function menuFirstTab() { return TABS.find(k => menuOn(k)) || 'versions'; }
 function menuFirstDash() { return DASH_PAGES.find(p => menuOn('dashboard.' + p)) || ''; }
 function menuFirstSet() { return SET_PAGES.find(p => menuOn('set.' + p)) || 'global'; }
@@ -4948,6 +4997,7 @@ function menuApply(redirect) {
   document.querySelectorAll('[data-dashpage]').forEach(b => { b.hidden = !menuOn('dashboard.' + b.dataset.dashpage); });
   document.querySelectorAll('[data-setpage]').forEach(b => { b.hidden = !menuOn('set.' + b.dataset.setpage); });
   document.querySelectorAll('[data-wopage]').forEach(b => { b.hidden = !menuOn('wo.' + b.dataset.wopage); });
+  menuDropHiddenData();
   const nav = document.querySelector('#app>.tabs');
   if (nav) {
     const count = TABS.filter(k => !$('t-' + k).hidden).length;

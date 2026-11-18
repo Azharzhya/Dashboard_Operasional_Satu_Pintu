@@ -800,17 +800,17 @@
           <h1 class="ph">Versi &amp; Changelog</h1>
           <p class="lead">Catatan fitur, penyempurnaan, dan perbaikan Dashboard Operasional Satu Pintu dari fondasi awal hingga rilis saat ini.</p>
         </div>
-        <span class="version-current"><i></i> Versi saat ini <b>v.20.25</b></span>
+        <span class="version-current"><i></i> Versi saat ini <b>v.20.28</b></span>
       </div>
 
       <section class="version-overview" aria-label="Ringkasan versi saat ini">
         <div class="version-overview-main">
           <span class="version-overview-label">RILIS TERBARU</span>
-          <strong>Dashboard Operasional Satu Pintu v.20.25</strong>
-          <p>Sub menu Dashboard, Write-Off, dan Setting kini terbuka ke bawah (accordion) tepat di bawah menu induknya pada sidebar, menggantikan dropdown di samping dan deretan tombol sub menu di dalam halaman.</p>
+          <strong>Dashboard Operasional Satu Pintu v.20.28</strong>
+          <p>Keamanan menu: menu yang disembunyikan di Manajemen kini ditutup juga di server, sehingga fungsi dan isinya tidak dapat dipakai atau diambil lewat pemanggilan langsung.</p>
         </div>
-        <div class="version-overview-stat"><strong>20.25</strong><span>Versi terbaru</span></div>
-        <div class="version-overview-stat"><strong>28 + 2</strong><span>Catatan rilis &amp; fondasi</span></div>
+        <div class="version-overview-stat"><strong>20.28</strong><span>Versi terbaru</span></div>
+        <div class="version-overview-stat"><strong>31 + 2</strong><span>Catatan rilis &amp; fondasi</span></div>
       </section>
 
       <div class="version-toolbar">
@@ -820,7 +820,36 @@
 
       <div id="version-list" class="version-list">
         <details class="version-item" open>
-          <summary><span class="version-marker latest">20.25</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.25</b><small>Sub menu sidebar terbuka ke bawah (accordion) untuk Dashboard, Write-Off, dan Setting</small></span><span class="version-tag">MENU · NAVIGASI</span></summary>
+          <summary><span class="version-marker latest">20.28</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.28</b><small>Menu yang disembunyikan di Manajemen ditutup juga di server (fungsi dan isinya)</small></span><span class="version-tag">KEAMANAN · MANAJEMEN</span></summary>
+          <div class="version-body"><ul>
+            <li>Sebelumnya pengaturan tampil/sembunyi di Manajemen hanya mengatur tombol di layar. Kini server ikut memeriksanya pada setiap permintaan: akun non-Administrator hanya dilayani bila menu pemakai fungsi atau data itu tampil untuk tingkatnya. Memanggil server langsung tanpa lewat tombol (alat pengembang browser, skrip) ditolak dengan pesan “Menu ini tidak tersedia untuk akun Anda”. Administrator tetap selalu boleh.</li>
+            <li>Cakupan: Dashboard (Tool PAR, Rekening Bergerak, Progres Harian beserta rinciannya, Analisa Cabang), Write-Off (Eksekusi, Approve, Report beserta Surat dan Jurnal, Verifikasi, Batalkan Verifikasi), Setting (Pengaturan Dashboard, Wilayah Kerja, Enable Download, Write-Off), dan Import Data. Menyembunyikan menu induk menutup seluruh sub menunya, dan aksi Write-Off baru yang belum terdaftar otomatis ikut dijaga lewat menu Write-Off.</li>
+            <li>Kabar Berita merangkum data Tool PAR, Rekening Bergerak, Progres Harian, dan Analisa Cabang. Selama Kabar Berita tampil, keempat sumber itu tetap boleh dibaca untuk keperluan Kabar Berita; bila Kabar Berita ikut disembunyikan, setiap sumber tertutup sesuai menunya masing-masing.</li>
+            <li>Akun yang boleh membuka Setting tetapi tidak boleh melihat Tool PAR maupun Kabar Berita hanya menerima nilai pengaturan (Penyesuaian Margin dan Simpanan Wajib), tanpa baris data cabang.</li>
+            <li>Di browser: begitu server menolak, sidebar langsung disegarkan, data menu itu dibuang dari halaman dan dari cache di perangkat, dan data yang tidak lagi boleh dilihat tidak dimuat sama sekali. Pengaturan Manajemen berlaku seketika setelah disimpan.</li>
+            <li>Server: Manajemen.gs, Akses.gs, dan Dashboard.gs diperbarui; wajib redeploy Apps Script dengan Version “New version”. Hasil verifikasi akun juga diingat selama satu permintaan agar penjagaan ini tidak menambah pembacaan tab Akses_2.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">20.27</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.27</b><small>Import Data PAR: lanjut otomatis saat gangguan, kurangi pembacaan ulang, catat waktu tiap langkah</small></span><span class="version-tag">IMPORT DATA</span></summary>
+          <div class="version-body"><ul>
+            <li>Pemeriksaan LOAN NO dan Konfirmasi &amp; Upload kini dilanjutkan otomatis hingga 4 kali bila terjadi gangguan sesaat (server terlalu lama menjawab, server sibuk, jaringan putus, atau “Pemeriksaan/Proses penyimpanan belum selesai”). Sebelumnya tombol harus ditekan ulang manual. Aman karena server memproses satu permintaan pada satu waktu dan melanjutkan dari titik terakhir tanpa menggandakan catatan. Kesalahan yang memang harus dihentikan (sesi berakhir, Data_Upload berubah) tidak diulang.</li>
+            <li>Batas waktu tunggu pemeriksaan dan penyimpanan dinaikkan menjadi 340 detik (batas Apps Script 360 detik) agar browser tidak memutus permintaan yang sebenarnya masih berjalan.</li>
+            <li>Server: Data_Upload lama dibaca ulang pada setiap batch pemeriksaan. Ukuran batch dinaikkan dari 10.000 ke 25.000 Loan No sehingga file sampai 25 ribu baris cukup satu kali pembacaan (sebelumnya dua kali). Sidik snapshot sebelum konfirmasi kini membaca dua kolom yang dipakai saja (Loan No dan Total Balance), sekitar 4 kali lebih sedikit data dengan nilai sidik yang identik. Hasil pemeriksaan dan isi sheet tidak berubah.</li>
+            <li>Waktu tiap langkah dicatat: tahap kirim data dan pemeriksaan ditampilkan di browser, sedangkan tahap penyimpanan (sidik, backup, arsip PAR Baru/Selesai, log Rekening Bergerak, ringkasan, penggantian Data_Upload) ditampilkan empat langkah terlama di pesan selesai, serta tercatat di Console browser dan log eksekusi Apps Script. Gunakan angka ini untuk menentukan optimasi berikutnya.</li>
+            <li>Server: UnggahExcel.gs diperbarui; wajib redeploy Apps Script dengan Version “New version”.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">20.26</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.26</b><small>Percobaan ulang otomatis untuk galat “Metode tidak didukung, gunakan POST”</small></span><span class="version-tag">PERBAIKAN</span></summary>
+          <div class="version-body"><ul>
+            <li>Kadang satu permintaan ke server Google sampai sebagai GET karena pengalihan Google (terlihat sebagai catatan merah “Metode tidak didukung, gunakan POST.” di Kabar Berita, dan hilang setelah muat ulang). Permintaan seperti itu kini diulang otomatis satu kali setelah jeda singkat.</li>
+            <li>Aman untuk semua aksi, termasuk yang menyimpan data: permintaan yang salah arah itu hanya dijawab pesan galat oleh server dan aksinya belum dijalankan, sehingga tidak ada data yang tersimpan dua kali.</li>
+            <li>Hanya perubahan di dashboard.js; tidak perlu redeploy Apps Script.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">20.25</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.25</b><small>Sub menu sidebar terbuka ke bawah (accordion) untuk Dashboard, Write-Off, dan Setting</small></span><span class="version-tag">MENU · NAVIGASI</span></summary>
           <div class="version-body"><ul>
             <li>Menu Dashboard, Write-Off, dan Setting kini memiliki panah di sidebar. Klik menunya, maka sub menu terbuka ke bawah tepat di bawahnya (menjorok sedikit ke dalam), sehingga Dashboard menampilkan Kabar Berita, Progres Harian, Analisa Cabang, Rekening Bergerak, dan Tool PAR; Write-Off menampilkan Eksekusi, Approve, dan Report Write-Off; Setting menampilkan Pengaturan Dashboard, Wilayah Kerja, Enable Download, Write-Off, dan Manajemen sesuai hak akses akun.</li>
             <li>Deretan tombol sub menu di bagian atas halaman Dashboard dan Setting dipindahkan ke sidebar, sehingga tidak ada dua tempat untuk hal yang sama. Sub menu halaman yang sedang dibuka otomatis terbuka dan halaman aktif diberi warna; klik menu yang sedang aktif untuk melipat atau membuka sub menunya.</li>
