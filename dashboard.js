@@ -289,7 +289,7 @@ const state = {
   progressRecap: 'new', progressDetailPage: 1, progressDetailSeq: 0, progressDetailResult: null,
   progressDetailCache: new Map(), progressDetailPending: new Map(),
   analisaCabang: null, analisaLoading: false, analisaLoadedAt: 0, analisaFilters: { branch: '*', period: '', compare: '' },
-  y2y: null, y2yLoading: false, y2yLoadedAt: 0,
+  y2y: null, y2yLoading: false, y2yLoadedAt: 0, y2yMode: '',
   kb: kbNew(), newsLoading: false, newsPromise: null, newsLoadSeq: 0, newsReady: false,
   rbView: 'branch', rbSearch: { branch: '', coordinator: '' },
   rbSort: { branch: { key: 'name', dir: 1 }, coordinator: { key: 'name', dir: 1 } },
@@ -4809,7 +4809,7 @@ async function exportAnalisaCabang() {
 }
 
 /* ---------------------------------------------------------------------
-   Dashboard: Analisa Y2Y
+   Dashboard: Analisa Perbandingan (kode y2y)
    Selisih = nilai tanggal terbaru DIKURANG nilai tanggal terakhir akhir bulan sebelumnya (sheet Analisa).
    Contoh: data 19 Nov 2026 - data 30 Okt 2026. Plus (> 0) hijau, minus (< 0) merah.
    Data cabang dan daftar Korcab (Akses_2 TINGKAT = USER 2) sudah dibatasi Wilayah_Kerja di server.
@@ -4844,10 +4844,43 @@ function y2yCell(col, v) {
   return h('td', { class: cls, text: y2yFormat(col, v), title: col.kind === 'money' ? rp(v) : fmt(v) });
 }
 // Hitung selisih per cabang dan akumulasi per Korcab dari data server.
-function y2yCompute(d) {
-  const periods = (d.periods || []).slice().sort((a, b) => b.localeCompare(a));
-  const latest = periods[0] || '';
-  const base = latest ? regionalNewsComparePeriod(periods, latest) : '';   // tanggal terakhir pada bulan sebelumnya
+// Mode perhitungan: selisih = nilai tanggal A (cur) dikurangi nilai tanggal B (base). Tanggal yang tidak ditemukan membuat mode tidak muncul.
+const Y2Y_MODES = [
+  { key: 'yty', label: 'Year to Year', cur: 'Akhir tahun ini', base: 'Akhir tahun sebelumnya',
+    rule: 'Tanggal terakhir akhir tahun ini dikurangi tanggal terakhir akhir tahun sebelumnya (contoh: 30 Des 2026 - 30 Des 2025).' },
+  { key: 'ytn', label: 'Year to Now', cur: 'Tanggal terbaru', base: 'Akhir bulan tahun sebelumnya',
+    rule: 'Tanggal terbaru dikurangi tanggal terakhir akhir bulan (sebelum bulan terbaru) pada tahun sebelumnya.' },
+  { key: 'mtm', label: 'Month to Month', cur: 'Akhir bulan tahun ini', base: 'Akhir bulan tahun sebelumnya',
+    rule: 'Tanggal terakhir akhir bulan tahun ini dikurangi tanggal terakhir akhir bulan yang sama tahun sebelumnya (contoh: 30 Okt 2026 - 30 Okt 2025).' },
+  { key: 'mtn', label: 'Month to Now', cur: 'Tanggal terbaru', base: 'Akhir bulan sebelumnya',
+    rule: 'Tanggal terbaru dikurangi tanggal terakhir akhir bulan sebelumnya (contoh: 19 Nov 2026 - 30 Okt 2026).' },
+  { key: 'dtd', label: 'Day to Day', cur: 'Hari ini (terbaru)', base: 'Hari kemarin',
+    rule: 'Tanggal hari ini (terbaru) dikurangi hari kemarin.' }
+];
+function y2yModesFor(periods) {
+  const latest = periods[0];
+  if (!latest) return [];
+  const y = +latest.slice(0, 4), m = +latest.slice(5, 7), day = +latest.slice(8, 10);
+  const pm = m === 1 ? { y: y - 1, m: 12 } : { y: y, m: m - 1 };   // bulan sebelum bulan terbaru
+  const lastIn = (yy, mm) => {
+    const pre = yy + '-' + String(mm).padStart(2, '0') + '-';
+    let best = '';
+    periods.forEach(p => { if (p.startsWith(pre) && p > best) best = p; });
+    return best;
+  };
+  const yesterday = new Date(Date.UTC(y, m - 1, day - 1)).toISOString().slice(0, 10);
+  const pairs = {
+    yty: [lastIn(y, 12), lastIn(y - 1, 12)],
+    ytn: [latest, lastIn(pm.y - 1, pm.m)],
+    mtm: [lastIn(pm.y, pm.m), lastIn(pm.y - 1, pm.m)],
+    mtn: [latest, lastIn(pm.y, pm.m)],
+    dtd: [latest, periods.indexOf(yesterday) >= 0 ? yesterday : '']
+  };
+  return Y2Y_MODES.map(md => Object.assign({ curDate: pairs[md.key][0], baseDate: pairs[md.key][1] }, md))
+    .filter(md => md.curDate && md.baseDate && md.curDate !== md.baseDate);
+}
+function y2yCompute(d, mode) {
+  const latest = mode ? mode.curDate : '', base = mode ? mode.baseDate : '';
   const pick = period => {
     const m = Object.create(null);
     if (period) (d.records || []).forEach(r => { if (r.period === period) m[r.key] = r; });
@@ -4880,7 +4913,7 @@ function y2yCompute(d) {
   const counted = branchRows.filter(r => r.diff);
   counted.forEach(r => ANALISA_METRICS.forEach(m => { total[m.key] += r.diff[m.key]; }));
   ANALISA_METRICS.forEach(m => { total[m.key] = round2(total[m.key]); });
-  return { latest, base, branchRows, korcabRows, noBase, total: counted.length ? total : null, counted: counted.length };
+  return { mode, latest, base, branchRows, korcabRows, noBase, total: counted.length ? total : null, counted: counted.length };
 }
 function y2yRenderTable(table, cols, firstHead, rows, footer) {
   const head = h('thead', null, h('tr', null, [firstHead].concat(cols.map(c => c.label)).map((v, i) => h('th', { class: i ? 'num' : '', text: v }))));
@@ -4898,29 +4931,48 @@ function y2yRenderTable(table, cols, firstHead, rows, footer) {
 function y2yRender() {
   const d = state.y2y;
   if (!d) return;
-  const c = y2yCompute(d);
+  const periods = (d.periods || []).slice().sort((a, b) => b.localeCompare(a));
+  const modes = y2yModesFor(periods);
+  if (!modes.some(m => m.key === state.y2yMode)) state.y2yMode = (modes.find(m => m.key === 'dtd') || modes[0] || {}).key || '';
+  const sel = $('y2-mode');
+  sel.replaceChildren(...modes.map(m => h('option', { value: m.key, text: m.label })));
+  sel.value = state.y2yMode; sel.disabled = !modes.length;
+  const mode = modes.find(m => m.key === state.y2yMode) || null;
+  const c = y2yCompute(d, mode);
   state.y2yView = c;
   $('y2-scope').textContent = d.scope || 'Sesuai Wilayah Kerja';
+  $('y2-cur-label').textContent = mode ? mode.cur : 'Tanggal A';
+  $('y2-base-label').textContent = mode ? 'Pembanding: ' + mode.base : 'Tanggal pembanding';
+  $('y2-rule').textContent = (mode ? mode.rule + ' ' : '') + 'Kolom Member PAR dan Outs. PAR dibalik: plus merah, nol atau minus hijau.';
   $('y2-latest').textContent = c.latest ? analisaLabelDate(c.latest) : '—';
   $('y2-base').textContent = c.base ? analisaLabelDate(c.base) : '—';
   $('y2-meta').textContent = c.latest && c.base
-    ? 'Selisih = ' + analisaLabelDate(c.latest) + ' dikurangi ' + analisaLabelDate(c.base) + ' · data sheet Analisa'
-    : (d.message || 'Selisih tiap indikator: nilai tanggal terbaru dikurangi nilai akhir bulan sebelumnya.');
+    ? c.mode.label + ' · ' + analisaLabelDate(c.latest) + ' dikurangi ' + analisaLabelDate(c.base) + ' · data sheet Analisa'
+    : (d.message || 'Pilih perhitungan untuk membandingkan tanggal pada data Analisa.');
   $('y2-sync').textContent = d.generatedAt ? 'Terakhir diperiksa: ' + fmtStamp(d.generatedAt) + (d.timezone ? ' · ' + d.timezone : '') : '';
   y2yRenderTable($('y2-t1'), Y2Y_COLS_BRANCH, 'Nama Cabang',
     c.branchRows.map(r => ({ name: r.branch, diff: r.diff })),
     c.branchRows.length ? { label: 'TOTAL · ' + fmt(c.counted) + ' cabang', diff: c.total } : null);
   y2yRenderTable($('y2-t2'), Y2Y_COLS_KORCAB, 'Nama User',
     c.korcabRows.map(r => ({ name: r.name, diff: r.diff, hint: fmt(r.used) + ' dari ' + fmt(r.total) + ' cabang wilayah kerja memiliki data' })), null);
+  const CARD_ICON = { member: 'users', disbursement: 'send', outstanding: 'coins', saving: 'wallet', repayment: 'repay', margin: 'percent', memberPAR: 'alert', outstandingPAR: 'alert' };
+  $('y2-cards').replaceChildren(...Y2Y_COLS_BRANCH.map(col => {
+    const v = c.total ? c.total[col.key] : null, tone = y2yTone(col, v);
+    return h('article', { class: 'kb-card' + (tone === 'g' ? ' tone-good' : tone === 'r' ? ' tone-bad' : '') },
+      kbIcon(CARD_ICON[col.key]),
+      h('span', { class: 'kb-label', text: col.label }),
+      h('strong', { class: 'kb-value', text: v == null ? '—' : y2yFormat(col, v) }),
+      h('span', { class: 'kb-note', text: v == null ? 'Belum ada data pembanding' : 'Total selisih ' + fmt(c.counted) + ' cabang' }));
+  }));
   $('y2-t1-caption').textContent = c.latest && c.base
-    ? 'Nilai selisih (Y2Y) per cabang · ' + analisaLabelDate(c.latest) + ' dikurangi ' + analisaLabelDate(c.base)
-    : 'Nilai selisih (Y2Y) untuk masing-masing cabang.';
-  $('y2-t2-caption').textContent = 'Akumulasi nilai selisih (Y2Y) sesuai wilayah kerja masing-masing Korcab (user TINGKAT USER 2).';
+    ? 'Nilai selisih (' + c.mode.label + ') per cabang · ' + analisaLabelDate(c.latest) + ' dikurangi ' + analisaLabelDate(c.base)
+    : 'Nilai selisih perbandingan untuk masing-masing cabang.';
+  $('y2-t2-caption').textContent = 'Akumulasi nilai selisih perbandingan sesuai wilayah kerja masing-masing Korcab (user TINGKAT USER 2).';
   const notices = [];
   if (d.scopeMessage) notices.push(d.scopeMessage);
   if (d.empty && !d.message) notices.push('Sheet Analisa belum memiliki data pada cakupan akun ini.');
   if (d.message && d.empty) notices.push(d.message);
-  if (c.latest && !c.base) notices.push('Belum ada data bulan sebelum ' + analisaLabelDate(c.latest) + ', sehingga selisih Y2Y belum dapat dihitung. Unggah file Analisa akhir bulan sebelumnya melalui menu Import Data.');
+  if (!modes.length && d.periods && d.periods.length) notices.push('Belum ada pasangan tanggal yang dapat dibandingkan pada data Analisa. Unggah data Analisa tanggal lainnya melalui menu Import Data.');
   if (c.noBase.length) notices.push(fmt(c.noBase.length) + ' cabang tidak punya data pada ' + analisaLabelDate(c.base) + ' dan tidak ikut dihitung: ' + c.noBase.slice(0, 8).join(', ') + (c.noBase.length > 8 ? ', dan lainnya' : '') + '.');
   if (d.missingPeriod) notices.push(fmt(d.missingPeriod) + ' baris di sheet Analisa diabaikan karena Periode Analisa kosong/tidak valid.');
   $('y2-notice').hidden = !notices.length; $('y2-notice').textContent = notices.join(' ');
@@ -4939,8 +4991,8 @@ async function loadAnalisaY2Y(options) {
     if (r.code === 'SESSION_REQUIRED') return logout(r.error);
     if (!r.ok) {
       state.y2y = null;
-      $('y2-notice').hidden = false; $('y2-notice').textContent = r.error || 'Gagal mengambil data Analisa Y2Y.';
-      $('y2-meta').textContent = 'Analisa Y2Y gagal dimuat.';
+      $('y2-notice').hidden = false; $('y2-notice').textContent = r.error || 'Gagal mengambil data Analisa Perbandingan.';
+      $('y2-meta').textContent = 'Analisa Perbandingan gagal dimuat.';
       return;
     }
     state.y2y = r; state.y2yLoadedAt = Date.now();
@@ -4955,14 +5007,12 @@ async function loadAnalisaY2Y(options) {
   }
 }
 async function exportAnalisaY2Y() {
-  const d = state.y2y;
-  if (!d) return;
-  const c = y2yCompute(d);
-  if (!c.latest || !c.base || !c.counted) return;
+  const d = state.y2y, c = state.y2yView;
+  if (!d || !c || !c.mode || !c.latest || !c.base || !c.counted) return;
   const btn = $('y2-export'); btn.disabled = true; setNote('y2-msg', 'Menyiapkan laporan Excel…');
   try {
     await Promise.all([loadXLSX(), nextFrame()]);
-    const sub = 'Selisih = ' + analisaLabelDate(c.latest) + ' dikurangi ' + analisaLabelDate(c.base) + ' · ' + (d.scope || '');
+    const sub = c.mode.label + ': ' + analisaLabelDate(c.latest) + ' dikurangi ' + analisaLabelDate(c.base) + ' · ' + (d.scope || '');
     const toRows = (rows, cols) => rows.map(r => [r.name].concat(cols.map(col => r.diff ? r.diff[col.key] : '')));
     const colorize = (ws, rows, cols, firstRow) => {
       rows.forEach((row, i) => cols.forEach((col, j) => {
@@ -4980,19 +5030,19 @@ async function exportAnalisaY2Y() {
     b1.push(['TOTAL'].concat(Y2Y_COLS_BRANCH.map(col => c.total ? c.total[col.key] : '')));
     const b2 = toRows(c.korcabRows, Y2Y_COLS_KORCAB);
     const wb = XLSX.utils.book_new();
-    const ws1 = analisaExportSheet('Y2Y: ANALISA PER CABANG', sub, ['Nama Cabang'].concat(Y2Y_COLS_BRANCH.map(x => x.label)), b1, [34, 15, 20, 20, 20, 20, 20, 15, 20], []);
+    const ws1 = analisaExportSheet('PERBANDINGAN: ANALISA PER CABANG', sub, ['Nama Cabang'].concat(Y2Y_COLS_BRANCH.map(x => x.label)), b1, [34, 15, 20, 20, 20, 20, 20, 15, 20], []);
     colorize(ws1, b1, Y2Y_COLS_BRANCH, 4);
     XLSX.utils.book_append_sheet(wb, ws1, 'Per Cabang');
-    const ws2 = analisaExportSheet('Y2Y: ANALISA PER KORCAB', sub, ['Nama User'].concat(Y2Y_COLS_KORCAB.map(x => x.label)), b2, [34, 15, 20, 20, 20, 20, 20, 15, 20], []);
+    const ws2 = analisaExportSheet('PERBANDINGAN: ANALISA PER KORCAB', sub, ['Nama User'].concat(Y2Y_COLS_KORCAB.map(x => x.label)), b2, [34, 15, 20, 20, 20, 20, 20, 15, 20], []);
     colorize(ws2, b2, Y2Y_COLS_KORCAB, 4);
     XLSX.utils.book_append_sheet(wb, ws2, 'Per Korcab');
     XLSX.utils.book_append_sheet(wb, analisaExportSheet('PETUNJUK', 'Sumber: sheet Analisa.', ['Istilah', 'Keterangan'], [
-      ['Rumus selisih', 'Nilai tanggal terbaru dikurangi nilai tanggal terakhir akhir bulan sebelumnya.'],
+      ['Perhitungan terpilih', c.mode.label + ': ' + c.mode.rule],
       ['Warna sel', 'Plus (> 0) hijau, minus (< 0) merah. Kolom Member PAR dan Outs. PAR dibalik: plus merah, nol atau minus hijau.'],
       ['Per Korcab', 'Akumulasi selisih cabang pada Wilayah_Kerja user bertingkat USER 2, dengan kolom yang sama seperti tabel per cabang.'],
       ['Cabang tanpa pembanding', 'Cabang yang tidak punya data pada tanggal pembanding tidak ikut dihitung.']
     ], [26, 100], []), 'Petunjuk');
-    XLSX.writeFile(wb, 'Analisa_Y2Y_' + c.latest + '.xlsx');
+    XLSX.writeFile(wb, 'Analisa_Perbandingan_' + c.mode.key + '_' + c.latest + '.xlsx');
     setNote('y2-msg', 'Laporan Excel berhasil dibuat (3 sheet).', 'good');
   } catch (err) { setNote('y2-msg', err && err.message ? err.message : 'Gagal membuat laporan Excel.', 'bad'); }
   finally { btn.disabled = false; }
@@ -7364,6 +7414,7 @@ function bind() {
   $('an-export').onclick = exportAnalisaCabang;
   $('an-img').onclick = () => exportDashboardImage('analisa');
   $('y2-refresh').onclick = () => loadAnalisaY2Y();
+  $('y2-mode').onchange = () => { state.y2yMode = $('y2-mode').value; y2yRender(); };
   $('y2-export').onclick = exportAnalisaY2Y;
   $('an-branch').onchange = () => { state.analisaFilters.branch = $('an-branch').value; analisaUpdatePeriodOptions(false); analisaRenderDashboard(); };
   $('an-period').onchange = () => { state.analisaFilters.period = $('an-period').value; state.analisaFilters.compare = ''; analisaUpdateCompareOptions(); analisaRenderDashboard(); };

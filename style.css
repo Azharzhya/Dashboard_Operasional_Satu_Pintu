@@ -934,6 +934,7 @@ th.num .th{flex-direction:row-reverse}
 .y2-chip.y2-pos{background:#bbf7d0;color:#14532d}
 .y2-chip.y2-neg{background:#fecaca;color:#7f1d1d}
 .y2-note{margin:9px 0 0;color:var(--mute);font-size:10px;font-weight:600}
+.y2-filter{grid-template-columns:minmax(220px,380px)}
 .y2-second{margin-top:14px}
 .an-table-wrap.y2-wrap{max-height:none;overflow-y:visible}
 .y2-table{min-width:880px}
@@ -1467,3 +1468,53 @@ th.num .th{flex-direction:row-reverse}
   .tab-caret svg{width:13px;height:13px}
   .tab[aria-expanded=true] .tab-caret{transform:none}
 }
+
+/* ---------- Kotak informasi bergaya Kabar Berita (semua halaman Dashboard selain Kabar Berita) ----------
+   Gradien hijau, lingkaran emas, label bergaris emas, teks putih. Hijau = baik, merah = perlu perhatian, emas = waspada. */
+.rb-kpi,.kpis>div,.kpis>div:first-child,.cat:not(.skel),.ph-primary-card,.ph-movement-kpi,.ph-net-strip>div,.an-kpi-card,.y2-formula{
+  --kb-from:#064e3b;--kb-mid:#07644a;--kb-to:#0a7a5a;position:relative;isolation:isolate;overflow:hidden;border:0;border-radius:18px;color:#fff;
+  background:linear-gradient(135deg,var(--kb-from) 0%,var(--kb-mid) 58%,var(--kb-to) 100%);box-shadow:0 10px 22px rgba(6,78,59,.2);
+  transition:transform .18s ease,box-shadow .18s ease}
+.rb-kpi::before,.kpis>div::before,.cat:not(.skel)::before,.ph-primary-card::before,.ph-movement-kpi::before,.ph-net-strip>div::before,.an-kpi-card::before,.y2-formula::before{
+  content:"";position:absolute;z-index:-1;right:-36px;top:-48px;width:140px;height:140px;border-radius:50%;background:rgba(246,201,21,.2)}
+.rb-kpi::after,.kpis>div::after,.cat:not(.skel)::after,.ph-primary-card::after,.ph-done-card::after,.ph-movement-kpi::after,.ph-net-strip>div::after,.an-kpi-card::after,.y2-formula::after{
+  content:"";position:absolute;z-index:-1;left:-34px;bottom:-66px;top:auto;right:auto;width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.08);opacity:1}
+.rb-kpi:hover,.kpis>div:hover,.cat:not(.skel):hover,.an-kpi-card:hover{transform:translateY(-2px);box-shadow:0 14px 28px rgba(6,78,59,.26)}
+.kpis>div,.kpis>div:first-child{padding:16px 18px}
+.ph-net-strip{padding:0;border:0;background:none;gap:12px}
+.ph-net-strip>div{min-width:200px;padding:14px 18px}
+/* warna bermakna */
+.ph-new-card{--kb-from:#7f1d1d;--kb-mid:#a52f2f;--kb-to:#c24a3c;box-shadow:0 10px 22px rgba(127,29,29,.22)}
+.ph-done-card,.rb-kpi:nth-child(2),.rb-kpi:nth-child(3){--kb-from:#065f46;--kb-mid:#0a7a5a;--kb-to:#12a37a}
+.rb-kpi:nth-child(4){--kb-from:#5c4300;--kb-mid:#7d5c06;--kb-to:#96700a;box-shadow:0 10px 22px rgba(92,67,0,.22)}
+/* teks */
+.rb-kpi-label,.kpis dt,.cat-t,.ph-card-label,.ph-done-card .ph-card-label,.ph-net-label,.an-kpi-label,.ph-movement-kpi .eyebrow{
+  color:rgba(255,255,255,.84);font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+.rb-kpi strong,.kpis dd,.cat-n,.ph-card-amount,.ph-net-strip b,.ph-net-strip b.positive,.an-kpi-value,.an-kpi-current .an-kpi-value,.an-kpi-baseline strong,.ph-card-count b,
+.ph-movement-kpi-main h2,.ph-movement-kpi-value strong{color:#fff;text-shadow:0 1px 0 rgba(0,0,0,.12)}
+.ph-net-strip b.negative{color:#ffe08a}
+.rb-kpi small,.kpis dd small,.cat small,.ph-card-caption,.ph-card-count span,.ph-net-strip small,.an-kpi-hint,.an-kpi-period small,.an-kpi-baseline small,
+.an-kpi-delta-item small,.an-change small,.ph-movement-kpi-main p,.ph-movement-kpi-value small,.ph-movement-kpi-value span{color:rgba(255,255,255,.8)}
+.an-kpi-delta-item b,.an-change b,.an-change.neutral b{color:rgba(255,255,255,.92)}
+.an-kpi-delta.up .an-kpi-delta-item b,.an-change.up b{color:#b9f6d3}
+.an-kpi-delta.down .an-kpi-delta-item b,.an-change.down b{color:#ffe08a}
+.an-kpi-baseline,.an-kpi-delta,.an-change,.ph-card-count{border-color:rgba(255,255,255,.26)}
+.an-kpi-no-compare{background:rgba(255,255,255,.14);color:rgba(255,255,255,.88)}
+.rb-kpi-icon.green,.rb-kpi-icon.yellow,.ph-card-mark,.ph-done-card .ph-card-mark{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.24);color:#fff}
+.share{background:rgba(255,255,255,.22)}.share i{background:var(--yel)}
+.cat:not(.skel):hover{border-color:transparent}
+.cat[aria-pressed=true]:not(.skel){background:linear-gradient(135deg,var(--kb-from) 0%,var(--kb-mid) 58%,var(--kb-to) 100%);box-shadow:0 0 0 3px var(--yel),0 10px 22px rgba(6,78,59,.24)}
+.cat[aria-pressed=true] .share{background:rgba(255,255,255,.22)}
+/* Y2Y: tanggal dan legenda pada kotak gradien */
+.y2-dates small{color:rgba(255,255,255,.8)}.y2-dates strong{color:#fff}.y2-minus{color:var(--yel)}.y2-note{color:rgba(255,255,255,.78)}
+.y2-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:0 0 16px}
+@media(max-width:900px){.y2-cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.y2-cards{grid-template-columns:1fr}}
+/* Y2Y: huruf kartu ringkasan dikecilkan; nilai tidak terpecah ke baris baru */
+.y2-cards .kb-card{padding:14px 16px 13px;gap:5px}
+.y2-cards .kb-label{font-size:10px}
+.y2-cards .kb-value{font-size:clamp(16px,1.55vw,21px);white-space:nowrap;overflow-wrap:normal;line-height:1.2}
+.y2-cards .kb-note{font-size:11px}
+.y2-cards .kb-ico{width:32px;height:32px;right:12px;top:12px;border-radius:10px}
+.y2-cards .kb-ico svg{width:17px;height:17px}
+@media(max-width:520px){.y2-cards .kb-value{font-size:20px}}

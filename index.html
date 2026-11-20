@@ -108,7 +108,7 @@
       <button type="button" class="tab-sub-item" data-dashpage="sum" aria-pressed="true">Kabar Berita</button>
       <button type="button" class="tab-sub-item" data-dashpage="progress" aria-pressed="false">Progres Harian</button>
       <button type="button" class="tab-sub-item" data-dashpage="analisa" aria-pressed="false">Analisa Cabang</button>
-      <button type="button" class="tab-sub-item" data-dashpage="y2y" aria-pressed="false">Analisa Y2Y</button>
+      <button type="button" class="tab-sub-item" data-dashpage="y2y" aria-pressed="false">Analisa Perbandingan</button>
       <button type="button" class="tab-sub-item" data-dashpage="move" aria-pressed="false">Rekening Bergerak</button>
       <button type="button" class="tab-sub-item" data-dashpage="dash" aria-pressed="false">Tool PAR</button>
     </div>
@@ -477,13 +477,13 @@
         <p id="an-msg" class="note" role="status"></p>
       </div>
 
-      <!-- Dashboard Analisa Y2Y -->
+      <!-- Dashboard Analisa Perbandingan -->
       <div id="p-y2y" class="set-page" role="tabpanel" aria-labelledby="t-dashboard" hidden>
         <div class="dhead page-heading">
           <div>
-            <div class="eyebrow"><span class="eyebrow-dot"></span> SELISIH TERBARU DAN AKHIR BULAN LALU</div>
-            <h1 class="ph">Analisa Y2Y</h1>
-            <p class="lead" id="y2-meta">Selisih tiap indikator: nilai tanggal terbaru dikurangi nilai akhir bulan sebelumnya.</p>
+            <div class="eyebrow"><span class="eyebrow-dot"></span> SELISIH ANTAR TANGGAL ANALISA</div>
+            <h1 class="ph">Analisa Perbandingan</h1>
+            <p class="lead" id="y2-meta">Pilih perhitungan untuk membandingkan tanggal pada data Analisa.</p>
             <p class="sync" id="y2-sync" role="status"></p>
           </div>
           <div class="dact">
@@ -491,26 +491,30 @@
             <button class="btn fit" id="y2-export" type="button" disabled><span class="btn-icon" aria-hidden="true">↓</span><span class="btn-label">Unduh Excel</span></button>
           </div>
         </div>
+        <section class="an-filter-panel y2-filter" aria-label="Filter Analisa Perbandingan">
+          <label>Perhitungan Analisa Perbandingan<select id="y2-mode"><option value="">Memuat…</option></select></label>
+        </section>
         <div id="y2-notice" class="an-notice" role="status" hidden></div>
-        <section class="an-panel y2-formula" aria-label="Rumus selisih Y2Y">
+        <section class="an-panel y2-formula" aria-label="Rumus selisih perbandingan">
           <div class="y2-dates">
-            <div><small>Tanggal terbaru</small><strong id="y2-latest">—</strong></div>
+            <div><small id="y2-cur-label">Tanggal terbaru</small><strong id="y2-latest">—</strong></div>
             <span class="y2-minus" aria-hidden="true">−</span>
-            <div><small>Tanggal pembanding (akhir bulan sebelumnya)</small><strong id="y2-base">—</strong></div>
+            <div><small id="y2-base-label">Tanggal pembanding</small><strong id="y2-base">—</strong></div>
             <span class="y2-legend"><i class="y2-chip y2-pos">Plus (&gt; 0)</i><i class="y2-chip y2-neg">Minus (&lt; 0)</i></span>
           </div>
-          <p class="y2-note">Kolom Member PAR dan Outs. PAR dibalik: plus merah, nol atau minus hijau.</p>
+          <p class="y2-note" id="y2-rule">Kolom Member PAR dan Outs. PAR dibalik: plus merah, nol atau minus hijau.</p>
         </section>
+        <div id="y2-cards" class="y2-cards" aria-label="Total selisih perbandingan seluruh cabang"></div>
         <section class="an-panel">
           <div class="an-panel-head">
-            <div><h2>Y2Y: Analisa per Cabang</h2><p id="y2-t1-caption">Nilai selisih (Y2Y) untuk masing-masing cabang.</p></div>
+            <div><h2>Perbandingan: Analisa per Cabang</h2><p id="y2-t1-caption">Nilai selisih perbandingan untuk masing-masing cabang.</p></div>
             <span class="an-scope" id="y2-scope">Sesuai Wilayah Kerja</span>
           </div>
           <div class="tw an-table-wrap y2-wrap"><table id="y2-t1" class="an-table y2-table"></table></div>
         </section>
         <section class="an-panel y2-second">
           <div class="an-panel-head">
-            <div><h2>Y2Y: Analisa per Korcab</h2><p id="y2-t2-caption">Akumulasi nilai selisih (Y2Y) sesuai wilayah kerja masing-masing Korcab.</p></div>
+            <div><h2>Perbandingan: Analisa per Korcab</h2><p id="y2-t2-caption">Akumulasi nilai selisih perbandingan sesuai wilayah kerja masing-masing Korcab.</p></div>
           </div>
           <div class="tw an-table-wrap y2-wrap"><table id="y2-t2" class="an-table y2-table"></table></div>
         </section>
@@ -848,7 +852,7 @@
         <div class="version-overview-main">
           <span class="version-overview-label">RILIS TERBARU</span>
           <strong>Dashboard Operasional Satu Pintu v.20.29</strong>
-          <p>Sub menu baru Dashboard &gt; Analisa Y2Y: selisih tanggal terbaru dikurangi akhir bulan sebelumnya, per cabang dan per Korcab, dengan sel hijau untuk plus dan merah untuk minus.</p>
+          <p>Sub menu baru Dashboard &gt; Analisa Perbandingan dengan filter Perhitungan (Year to Year, Year to Now, Month to Month, Month to Now, Day to Day), per cabang dan per Korcab, dengan sel hijau untuk plus dan merah untuk minus.</p>
         </div>
         <div class="version-overview-stat"><strong>20.29</strong><span>Versi terbaru</span></div>
         <div class="version-overview-stat"><strong>31 + 2</strong><span>Catatan rilis &amp; fondasi</span></div>
@@ -861,13 +865,13 @@
 
       <div id="version-list" class="version-list">
         <details class="version-item" open>
-          <summary><span class="version-marker latest">20.29</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.29</b><small>Sub menu Dashboard &gt; Analisa Y2Y (selisih per cabang dan per Korcab)</small></span><span class="version-tag">DASHBOARD</span></summary>
+          <summary><span class="version-marker latest">20.29</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.29</b><small>Sub menu Dashboard &gt; Analisa Perbandingan (selisih per cabang dan per Korcab)</small></span><span class="version-tag">DASHBOARD</span></summary>
           <div class="version-body"><ul>
-            <li>Sub menu baru “Analisa Y2Y” di Dashboard, bersumber dari sheet Analisa. Selisih tiap indikator = nilai tanggal terbaru dikurangi nilai tanggal terakhir akhir bulan sebelumnya (contoh: data 19 Nov 2026 dikurangi data 30 Okt 2026), sehingga angka yang bertambah tampil plus (hijau). Tanggal terbaru dan tanggal pembanding dipilih otomatis dan ditampilkan di atas tabel.</li>
-            <li>Tabel “Y2Y: Analisa per Cabang”: Nama Cabang, Member, Disburse, Outs. Loan, Saving, Repayment, Margin, Member PAR, dan Outs. PAR, lengkap dengan baris total.</li>
-            <li>Tabel “Y2Y: Analisa per Korcab”: Nama User (akun Akses_2 bertingkat USER 2) dengan akumulasi selisih cabang pada Wilayah Kerjanya, dengan kolom yang sama seperti tabel per cabang: Member, Disburse, Outs. Loan, Saving, Repayment, Margin, Member PAR, Outs. PAR.</li>
+            <li>Sub menu baru “Analisa Perbandingan” di Dashboard, bersumber dari sheet Analisa. Filter “Perhitungan Analisa Perbandingan” (bawaan Day to Day): Year to Year = akhir tahun ini - akhir tahun sebelumnya; Year to Now = tanggal terbaru - akhir bulan tahun sebelumnya; Month to Month = akhir bulan tahun ini - akhir bulan tahun sebelumnya; Month to Now = tanggal terbaru - akhir bulan sebelumnya; Day to Day = hari ini (terbaru) - hari kemarin. Pilihan yang tanggalnya tidak ditemukan di data tidak ditampilkan.</li>
+            <li>Tabel “Perbandingan: Analisa per Cabang”: Nama Cabang, Member, Disburse, Outs. Loan, Saving, Repayment, Margin, Member PAR, dan Outs. PAR, lengkap dengan baris total.</li>
+            <li>Tabel “Perbandingan: Analisa per Korcab”: Nama User (akun Akses_2 bertingkat USER 2) dengan akumulasi selisih cabang pada Wilayah Kerjanya, dengan kolom yang sama seperti tabel per cabang: Member, Disburse, Outs. Loan, Saving, Repayment, Margin, Member PAR, Outs. PAR.</li>
             <li>Warna sel: nilai minus (&lt; 0) merah dan nilai plus (&gt; 0) hijau pada Member, Disburse, Outs. Loan, Saving, Repayment, dan Margin di kedua tabel. Kolom Member PAR dan Outs. PAR di kedua tabel warnanya dibalik: plus merah, nol atau minus hijau, karena kenaikan PAR berarti memburuk. Cabang yang tidak punya data pada tanggal pembanding ditandai “—” dan tidak ikut dihitung.</li>
-            <li>Kedua tabel ditampilkan penuh tanpa scroll ke bawah (semua baris langsung terlihat; hanya bergeser ke samping bila layar sempit). Tombol Muat ulang dan Unduh Excel (sheet Per Cabang, Per Korcab, Petunjuk; sel plus dan minus ikut berwarna). Akses data disaring di server menurut Wilayah Kerja, dan sub menu ini bisa ditampilkan atau disembunyikan per tingkat lewat Manajemen.</li>
+            <li>Kartu ringkasan total selisih per indikator ditampilkan di atas tabel, dan semua kotak informasi di Dashboard (selain Kabar Berita) kini bergaya kartu gradien seperti Kabar Berita. Kedua tabel ditampilkan penuh tanpa scroll ke bawah (semua baris langsung terlihat; hanya bergeser ke samping bila layar sempit). Tombol Muat ulang dan Unduh Excel (sheet Per Cabang, Per Korcab, Petunjuk; sel plus dan minus ikut berwarna). Akses data disaring di server menurut Wilayah Kerja, dan sub menu ini bisa ditampilkan atau disembunyikan per tingkat lewat Manajemen.</li>
             <li>Server: Dashboard.gs, Akses.gs, dan Manajemen.gs diperbarui; wajib redeploy Apps Script dengan Version “New version”.</li>
           </ul></div>
         </details>
