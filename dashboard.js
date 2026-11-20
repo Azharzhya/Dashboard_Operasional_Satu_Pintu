@@ -289,6 +289,7 @@ const state = {
   progressRecap: 'new', progressDetailPage: 1, progressDetailSeq: 0, progressDetailResult: null,
   progressDetailCache: new Map(), progressDetailPending: new Map(),
   analisaCabang: null, analisaLoading: false, analisaLoadedAt: 0, analisaFilters: { branch: '*', period: '', compare: '' },
+  y2y: null, y2yLoading: false, y2yLoadedAt: 0,
   kb: kbNew(), newsLoading: false, newsPromise: null, newsLoadSeq: 0, newsReady: false,
   rbView: 'branch', rbSearch: { branch: '', coordinator: '' },
   rbSort: { branch: { key: 'name', dir: 1 }, coordinator: { key: 'name', dir: 1 } },
@@ -329,11 +330,12 @@ function invalidateDashboardPages(source) {
   }
   if (source !== 'dash') state.lastCheck = 0;          // Tool PAR memeriksa ulang ke server (jawaban ringan bila isi sama)
   state.analisaCabang = null; state.analisaLoadedAt = 0;
+  state.y2y = null; state.y2yLoadedAt = 0;
   if (source !== 'sum') invalidateRegionalNewsData();   // sumber 'sum' = Kabar Berita sendiri: jangan membatalkan dirinya
 }
 
 function selectDashboardPage(which) {
-  if (which !== 'move' && which !== 'dash' && which !== 'sum' && which !== 'progress' && which !== 'analisa') which = 'move';
+  if (which !== 'move' && which !== 'dash' && which !== 'sum' && which !== 'progress' && which !== 'analisa' && which !== 'y2y') which = 'move';
   if (state.user && !menuOn('dashboard.' + which)) which = menuFirstDash() || which;   // sub menu yang disembunyikan Manajemen
   state.dashboardPage = which;
   $('p-move').hidden = which !== 'move';
@@ -341,6 +343,7 @@ function selectDashboardPage(which) {
   $('p-sum').hidden = which !== 'sum';
   $('p-progress').hidden = which !== 'progress';
   $('p-analisa').hidden = which !== 'analisa';
+  $('p-y2y').hidden = which !== 'y2y';
   document.querySelectorAll('[data-dashpage]').forEach(b =>
     b.setAttribute('aria-pressed', String(b.dataset.dashpage === which)));
   if (which === 'move' && state.user && !state.rekeningLoading
@@ -356,6 +359,8 @@ function selectDashboardPage(which) {
       && (!state.progress || Date.now() - state.progressLoadedAt > AUTO_SYNC_MS)) loadProgresHarian();
   if (which === 'analisa' && state.user && !state.analisaLoading
       && (!state.analisaCabang || Date.now() - state.analisaLoadedAt > AUTO_SYNC_MS)) loadAnalisaCabang();
+  if (which === 'y2y' && state.user && !state.y2yLoading
+      && (!state.y2y || Date.now() - state.y2yLoadedAt > AUTO_SYNC_MS)) loadAnalisaY2Y();
 }
 function selectTab(which, focus) {
   if (state.user && !menuOn(which)) which = menuFirstTab();   // menu yang tidak tampil untuk akun ini (Manajemen / tingkat)
@@ -559,6 +564,8 @@ function startAutoSync() {
       if (!state.progressLoading) loadProgresHarian({ automatic: true });
     } else if (!$('p-dashboard').hidden && state.dashboardPage === 'analisa') {
       if (!state.analisaLoading) loadAnalisaCabang({ automatic: true });
+    } else if (!$('p-dashboard').hidden && state.dashboardPage === 'y2y') {
+      if (!state.y2yLoading) loadAnalisaY2Y({ automatic: true });
     } else if (!$('p-dashboard').hidden && state.dashboardPage === 'sum') {
       if (!state.newsLoading && reserveAutoSync()) prepareRegionalNewsData({ force: true });
     } else if (state.data && !state.loading) loadDash({ automatic: true });
@@ -587,6 +594,7 @@ function logout(msg, forceRefresh) {
   state.progressDetailCache.clear(); state.progressDetailPending.clear();
   state.progressFilters = { branch: '', monthKey: '', progressDate: '', coordinatorNik: '' }; state.progressFilterRevision++;
   state.analisaCabang = null; state.analisaLoadedAt = 0; state.analisaLoading = false;
+  state.y2y = null; state.y2yLoadedAt = 0; state.y2yLoading = false;
   resetKabarBerita();
   woReset();
   state.menuAccess = null; state.menuAt = 0; state.menuLoading = false; menuForget(); mgReset();
@@ -698,6 +706,7 @@ function enterApp(user) {
   state.progressFilters = { branch: '', monthKey: '', progressDate: '', coordinatorNik: '' }; state.progressFilterRevision++;
   $('ph-filter-month').value = ''; $('ph-filter-branch').value = ''; $('ph-filter-date').value = ''; $('ph-filter-user').value = '';
   state.analisaCabang = null; state.analisaLoadedAt = 0; state.analisaLoading = false;
+  state.y2y = null; state.y2yLoadedAt = 0; state.y2yLoading = false;
   state.analisaFilters = { branch: '*', period: '', compare: '' };
   resetKabarBerita();
   woReset();
@@ -4800,6 +4809,196 @@ async function exportAnalisaCabang() {
 }
 
 /* ---------------------------------------------------------------------
+   Dashboard: Analisa Y2Y
+   Selisih = nilai tanggal terbaru DIKURANG nilai tanggal terakhir akhir bulan sebelumnya (sheet Analisa).
+   Contoh: data 19 Nov 2026 - data 30 Okt 2026. Plus (> 0) hijau, minus (< 0) merah.
+   Data cabang dan daftar Korcab (Akses_2 TINGKAT = USER 2) sudah dibatasi Wilayah_Kerja di server.
+   --------------------------------------------------------------------- */
+const Y2Y_COLS_BRANCH = [
+  { key: 'member', label: 'Member', kind: 'count', color: true },
+  { key: 'disbursement', label: 'Disburse', kind: 'money', color: true },
+  { key: 'outstanding', label: 'Outs. Loan', kind: 'money', color: true },
+  { key: 'saving', label: 'Saving', kind: 'money', color: true },
+  { key: 'repayment', label: 'Repayment', kind: 'money', color: true },
+  { key: 'margin', label: 'Margin', kind: 'money', color: true },
+  { key: 'memberPAR', label: 'Member PAR', kind: 'count', color: true, invert: true },   // PAR: terbalik (plus merah; nol atau minus hijau)
+  { key: 'outstandingPAR', label: 'Outs. PAR', kind: 'money', color: true, invert: true }
+];
+const Y2Y_COLS_KORCAB = Y2Y_COLS_BRANCH;   // kolom tabel per Korcab sama dengan tabel per cabang
+function y2yFormat(col, v) {
+  const sign = v > 0 ? '+' : v < 0 ? '-' : '';
+  const a = Math.abs(v);
+  return sign + (col.kind === 'money' ? 'Rp ' + fmt(a) : fmt(a));
+}
+// Warna sel: 'g' hijau, 'r' merah, '' tanpa warna. Kolom biasa: plus hijau, minus merah, nol tanpa warna.
+// Kolom PAR (invert): plus merah, nol atau minus hijau.
+function y2yTone(col, v) {
+  if (!col.color || v == null) return '';
+  if (col.invert) return v > 0 ? 'r' : 'g';
+  return v > 0 ? 'g' : v < 0 ? 'r' : '';
+}
+function y2yCell(col, v) {
+  if (v == null) return h('td', { class: 'num y2y-na', text: '—', title: 'Tidak ada data pada salah satu tanggal' });
+  const tone = y2yTone(col, v);
+  const cls = 'num' + (tone === 'g' ? ' y2y-pos' : tone === 'r' ? ' y2y-neg' : '');   // y2y-pos = sel hijau, y2y-neg = sel merah
+  return h('td', { class: cls, text: y2yFormat(col, v), title: col.kind === 'money' ? rp(v) : fmt(v) });
+}
+// Hitung selisih per cabang dan akumulasi per Korcab dari data server.
+function y2yCompute(d) {
+  const periods = (d.periods || []).slice().sort((a, b) => b.localeCompare(a));
+  const latest = periods[0] || '';
+  const base = latest ? regionalNewsComparePeriod(periods, latest) : '';   // tanggal terakhir pada bulan sebelumnya
+  const pick = period => {
+    const m = Object.create(null);
+    if (period) (d.records || []).forEach(r => { if (r.period === period) m[r.key] = r; });
+    return m;
+  };
+  const L = pick(latest), B = pick(base), round2 = n => Math.round(n * 100) / 100;
+  const branchRows = [], noBase = [];
+  Object.keys(L).forEach(key => {
+    const l = L[key], b = B[key];
+    if (!b) { noBase.push(l.branch); branchRows.push({ key, branch: l.branch, diff: null }); return; }
+    const diff = {};
+    ANALISA_METRICS.forEach(m => { diff[m.key] = round2((Number(l[m.key]) || 0) - (Number(b[m.key]) || 0)); });
+    branchRows.push({ key, branch: l.branch, diff });
+  });
+  branchRows.sort((a, b) => collator.compare(a.branch, b.branch));
+  const byKey = Object.create(null);
+  branchRows.forEach(r => { byKey[r.key] = r; });
+  const korcabRows = (d.korcab || []).map(k => {
+    const sum = {}; ANALISA_METRICS.forEach(m => { sum[m.key] = 0; });
+    let used = 0;
+    (k.branchKeys || []).forEach(key => {
+      const r = byKey[key];
+      if (!r || !r.diff) return;
+      used++; ANALISA_METRICS.forEach(m => { sum[m.key] += r.diff[m.key]; });
+    });
+    ANALISA_METRICS.forEach(m => { sum[m.key] = round2(sum[m.key]); });
+    return { nik: k.nik, name: k.name, total: (k.branchKeys || []).length, used, diff: used ? sum : null };
+  });
+  const total = {}; ANALISA_METRICS.forEach(m => { total[m.key] = 0; });
+  const counted = branchRows.filter(r => r.diff);
+  counted.forEach(r => ANALISA_METRICS.forEach(m => { total[m.key] += r.diff[m.key]; }));
+  ANALISA_METRICS.forEach(m => { total[m.key] = round2(total[m.key]); });
+  return { latest, base, branchRows, korcabRows, noBase, total: counted.length ? total : null, counted: counted.length };
+}
+function y2yRenderTable(table, cols, firstHead, rows, footer) {
+  const head = h('thead', null, h('tr', null, [firstHead].concat(cols.map(c => c.label)).map((v, i) => h('th', { class: i ? 'num' : '', text: v }))));
+  if (!rows.length) {
+    table.replaceChildren(head, h('tbody', null, h('tr', null, h('td', { colspan: cols.length + 1, class: 'an-empty-cell', text: 'Belum ada data untuk ditampilkan.' }))));
+    return;
+  }
+  const body = h('tbody', null, rows.map(r => h('tr', null,
+    h('th', { scope: 'row', text: r.name, title: r.hint || null }),
+    cols.map(c => y2yCell(c, r.diff ? r.diff[c.key] : null)))));
+  const parts = [head, body];
+  if (footer) parts.push(h('tfoot', null, h('tr', null, h('th', { text: footer.label }), cols.map(c => y2yCell(c, footer.diff ? footer.diff[c.key] : null)))));
+  table.replaceChildren(...parts);
+}
+function y2yRender() {
+  const d = state.y2y;
+  if (!d) return;
+  const c = y2yCompute(d);
+  state.y2yView = c;
+  $('y2-scope').textContent = d.scope || 'Sesuai Wilayah Kerja';
+  $('y2-latest').textContent = c.latest ? analisaLabelDate(c.latest) : '—';
+  $('y2-base').textContent = c.base ? analisaLabelDate(c.base) : '—';
+  $('y2-meta').textContent = c.latest && c.base
+    ? 'Selisih = ' + analisaLabelDate(c.latest) + ' dikurangi ' + analisaLabelDate(c.base) + ' · data sheet Analisa'
+    : (d.message || 'Selisih tiap indikator: nilai tanggal terbaru dikurangi nilai akhir bulan sebelumnya.');
+  $('y2-sync').textContent = d.generatedAt ? 'Terakhir diperiksa: ' + fmtStamp(d.generatedAt) + (d.timezone ? ' · ' + d.timezone : '') : '';
+  y2yRenderTable($('y2-t1'), Y2Y_COLS_BRANCH, 'Nama Cabang',
+    c.branchRows.map(r => ({ name: r.branch, diff: r.diff })),
+    c.branchRows.length ? { label: 'TOTAL · ' + fmt(c.counted) + ' cabang', diff: c.total } : null);
+  y2yRenderTable($('y2-t2'), Y2Y_COLS_KORCAB, 'Nama User',
+    c.korcabRows.map(r => ({ name: r.name, diff: r.diff, hint: fmt(r.used) + ' dari ' + fmt(r.total) + ' cabang wilayah kerja memiliki data' })), null);
+  $('y2-t1-caption').textContent = c.latest && c.base
+    ? 'Nilai selisih (Y2Y) per cabang · ' + analisaLabelDate(c.latest) + ' dikurangi ' + analisaLabelDate(c.base)
+    : 'Nilai selisih (Y2Y) untuk masing-masing cabang.';
+  $('y2-t2-caption').textContent = 'Akumulasi nilai selisih (Y2Y) sesuai wilayah kerja masing-masing Korcab (user TINGKAT USER 2).';
+  const notices = [];
+  if (d.scopeMessage) notices.push(d.scopeMessage);
+  if (d.empty && !d.message) notices.push('Sheet Analisa belum memiliki data pada cakupan akun ini.');
+  if (d.message && d.empty) notices.push(d.message);
+  if (c.latest && !c.base) notices.push('Belum ada data bulan sebelum ' + analisaLabelDate(c.latest) + ', sehingga selisih Y2Y belum dapat dihitung. Unggah file Analisa akhir bulan sebelumnya melalui menu Import Data.');
+  if (c.noBase.length) notices.push(fmt(c.noBase.length) + ' cabang tidak punya data pada ' + analisaLabelDate(c.base) + ' dan tidak ikut dihitung: ' + c.noBase.slice(0, 8).join(', ') + (c.noBase.length > 8 ? ', dan lainnya' : '') + '.');
+  if (d.missingPeriod) notices.push(fmt(d.missingPeriod) + ' baris di sheet Analisa diabaikan karena Periode Analisa kosong/tidak valid.');
+  $('y2-notice').hidden = !notices.length; $('y2-notice').textContent = notices.join(' ');
+  $('y2-export').disabled = !(c.latest && c.base && c.counted);
+}
+async function loadAnalisaY2Y(options) {
+  if (state.y2yLoading || !state.user) return;
+  const automatic = !!(options && options.automatic);
+  state.y2yLoading = true;
+  $('y2-refresh').disabled = true; $('y2-export').disabled = true;
+  if (!automatic) $('y2-sync').textContent = 'Mengambil data dari sheet Analisa…';
+  setNote('y2-msg', '');
+  try {
+    if (automatic && !reserveAutoSync()) return;
+    const r = await api('webAnalisaY2Y', { token: (session.get() || {}).token }, { retry: true });
+    if (r.code === 'SESSION_REQUIRED') return logout(r.error);
+    if (!r.ok) {
+      state.y2y = null;
+      $('y2-notice').hidden = false; $('y2-notice').textContent = r.error || 'Gagal mengambil data Analisa Y2Y.';
+      $('y2-meta').textContent = 'Analisa Y2Y gagal dimuat.';
+      return;
+    }
+    state.y2y = r; state.y2yLoadedAt = Date.now();
+    y2yRender();
+    if (automatic) $('y2-sync').textContent += ' · sinkron otomatis';
+  } catch (err) {
+    $('y2-notice').hidden = false; $('y2-notice').textContent = err && err.message ? err.message : 'Jaringan tidak dapat dihubungi.';
+  } finally {
+    state.y2yLoading = false; $('y2-refresh').disabled = false;
+    const v = state.y2y && state.y2yView;
+    $('y2-export').disabled = !(state.y2y && v && v.latest && v.base && v.counted);
+  }
+}
+async function exportAnalisaY2Y() {
+  const d = state.y2y;
+  if (!d) return;
+  const c = y2yCompute(d);
+  if (!c.latest || !c.base || !c.counted) return;
+  const btn = $('y2-export'); btn.disabled = true; setNote('y2-msg', 'Menyiapkan laporan Excel…');
+  try {
+    await Promise.all([loadXLSX(), nextFrame()]);
+    const sub = 'Selisih = ' + analisaLabelDate(c.latest) + ' dikurangi ' + analisaLabelDate(c.base) + ' · ' + (d.scope || '');
+    const toRows = (rows, cols) => rows.map(r => [r.name].concat(cols.map(col => r.diff ? r.diff[col.key] : '')));
+    const colorize = (ws, rows, cols, firstRow) => {
+      rows.forEach((row, i) => cols.forEach((col, j) => {
+        const cell = XLSX.utils.encode_cell({ r: firstRow + i, c: j + 1 });
+        if (!ws[cell] || typeof ws[cell].v !== 'number') return;
+        const v = ws[cell].v;
+        ws[cell].z = col.kind === 'money' ? '#,##0.00;-#,##0.00;0' : '#,##0;-#,##0;0';
+        const tone = y2yTone(col, v);
+        if (!tone) return;
+        ws[cell].s = { font: { name: 'Aptos', sz: 10, bold: true, color: { rgb: tone === 'g' ? '14532D' : '7F1D1D' } },
+          fill: { patternType: 'solid', fgColor: { rgb: tone === 'g' ? 'BBF7D0' : 'FECACA' } }, alignment: { vertical: 'center' } };
+      }));
+    };
+    const b1 = toRows(c.branchRows.map(r => ({ name: r.branch, diff: r.diff })), Y2Y_COLS_BRANCH);
+    b1.push(['TOTAL'].concat(Y2Y_COLS_BRANCH.map(col => c.total ? c.total[col.key] : '')));
+    const b2 = toRows(c.korcabRows, Y2Y_COLS_KORCAB);
+    const wb = XLSX.utils.book_new();
+    const ws1 = analisaExportSheet('Y2Y: ANALISA PER CABANG', sub, ['Nama Cabang'].concat(Y2Y_COLS_BRANCH.map(x => x.label)), b1, [34, 15, 20, 20, 20, 20, 20, 15, 20], []);
+    colorize(ws1, b1, Y2Y_COLS_BRANCH, 4);
+    XLSX.utils.book_append_sheet(wb, ws1, 'Per Cabang');
+    const ws2 = analisaExportSheet('Y2Y: ANALISA PER KORCAB', sub, ['Nama User'].concat(Y2Y_COLS_KORCAB.map(x => x.label)), b2, [34, 15, 20, 20, 20, 20, 20, 15, 20], []);
+    colorize(ws2, b2, Y2Y_COLS_KORCAB, 4);
+    XLSX.utils.book_append_sheet(wb, ws2, 'Per Korcab');
+    XLSX.utils.book_append_sheet(wb, analisaExportSheet('PETUNJUK', 'Sumber: sheet Analisa.', ['Istilah', 'Keterangan'], [
+      ['Rumus selisih', 'Nilai tanggal terbaru dikurangi nilai tanggal terakhir akhir bulan sebelumnya.'],
+      ['Warna sel', 'Plus (> 0) hijau, minus (< 0) merah. Kolom Member PAR dan Outs. PAR dibalik: plus merah, nol atau minus hijau.'],
+      ['Per Korcab', 'Akumulasi selisih cabang pada Wilayah_Kerja user bertingkat USER 2, dengan kolom yang sama seperti tabel per cabang.'],
+      ['Cabang tanpa pembanding', 'Cabang yang tidak punya data pada tanggal pembanding tidak ikut dihitung.']
+    ], [26, 100], []), 'Petunjuk');
+    XLSX.writeFile(wb, 'Analisa_Y2Y_' + c.latest + '.xlsx');
+    setNote('y2-msg', 'Laporan Excel berhasil dibuat (3 sheet).', 'good');
+  } catch (err) { setNote('y2-msg', err && err.message ? err.message : 'Gagal membuat laporan Excel.', 'bad'); }
+  finally { btn.disabled = false; }
+}
+
+/* ---------------------------------------------------------------------
    Setting: Enable Download (hanya ADMINISTRATOR; server memeriksa ulang)
    --------------------------------------------------------------------- */
 function buildImageDownloadForm() {
@@ -4939,7 +5138,7 @@ async function savePola() {
    --------------------------------------------------------------------- */
 const MENU_CACHE = 'dash_menu_v1';
 const MENU_REFRESH_MS = 60 * 1000;
-const DASH_PAGES = ['sum', 'progress', 'analisa', 'move', 'dash'];      // urutan tombol sub menu Dashboard
+const DASH_PAGES = ['sum', 'progress', 'analisa', 'y2y', 'move', 'dash'];      // urutan tombol sub menu Dashboard
 const SET_PAGES = ['global', 'wilayah', 'enable-download', 'write-off', 'manajemen'];             // urutan tombol sub menu Setting
 const MSG_OLD_MENU = 'Server belum mendukung menu Manajemen. Tambahkan file Manajemen.gs dan perbarui Akses.gs di Apps Script, lalu Deploy > Manage deployments > Edit > Version: New version > Deploy.';
 
@@ -4975,6 +5174,7 @@ function menuDropHiddenData() {
   if (!menuOn('dashboard.move') && !sum && state.rekening) { state.rekening = null; state.rekeningLoadedAt = 0; }
   if (!menuOn('dashboard.progress') && !sum && state.progress) { state.progress = null; state.progressLoadedAt = 0; state.progressDetailResult = null; state.progressDetailCache.clear(); }
   if (!menuOn('dashboard.analisa') && !sum && state.analisaCabang) { state.analisaCabang = null; state.analisaLoadedAt = 0; }
+  if (!menuOn('dashboard.y2y') && state.y2y) { state.y2y = null; state.y2yLoadedAt = 0; }
   if (!sum && state.kb && (state.kb.tool || state.kb.rekening || state.kb.analisa || Object.keys(state.kb.progress || {}).length)) resetKabarBerita();
 }
 function menuFirstTab() { return TABS.find(k => menuOn(k)) || 'versions'; }
@@ -7163,6 +7363,8 @@ function bind() {
   $('an-refresh').onclick = () => loadAnalisaCabang();
   $('an-export').onclick = exportAnalisaCabang;
   $('an-img').onclick = () => exportDashboardImage('analisa');
+  $('y2-refresh').onclick = () => loadAnalisaY2Y();
+  $('y2-export').onclick = exportAnalisaY2Y;
   $('an-branch').onchange = () => { state.analisaFilters.branch = $('an-branch').value; analisaUpdatePeriodOptions(false); analisaRenderDashboard(); };
   $('an-period').onchange = () => { state.analisaFilters.period = $('an-period').value; state.analisaFilters.compare = ''; analisaUpdateCompareOptions(); analisaRenderDashboard(); };
   $('an-compare').onchange = () => {
@@ -7278,6 +7480,8 @@ function bind() {
         if (!state.progressLoading) loadProgresHarian({ automatic: true });
       } else if (!$('p-dashboard').hidden && state.dashboardPage === 'analisa') {
         if (!state.analisaLoading) loadAnalisaCabang({ automatic: true });
+      } else if (!$('p-dashboard').hidden && state.dashboardPage === 'y2y') {
+        if (!state.y2yLoading) loadAnalisaY2Y({ automatic: true });
       } else if (state.data && !state.loading) loadDash({ automatic: true });
     }
   });

@@ -108,6 +108,7 @@
       <button type="button" class="tab-sub-item" data-dashpage="sum" aria-pressed="true">Kabar Berita</button>
       <button type="button" class="tab-sub-item" data-dashpage="progress" aria-pressed="false">Progres Harian</button>
       <button type="button" class="tab-sub-item" data-dashpage="analisa" aria-pressed="false">Analisa Cabang</button>
+      <button type="button" class="tab-sub-item" data-dashpage="y2y" aria-pressed="false">Analisa Y2Y</button>
       <button type="button" class="tab-sub-item" data-dashpage="move" aria-pressed="false">Rekening Bergerak</button>
       <button type="button" class="tab-sub-item" data-dashpage="dash" aria-pressed="false">Tool PAR</button>
     </div>
@@ -475,6 +476,46 @@
         </section>
         <p id="an-msg" class="note" role="status"></p>
       </div>
+
+      <!-- Dashboard Analisa Y2Y -->
+      <div id="p-y2y" class="set-page" role="tabpanel" aria-labelledby="t-dashboard" hidden>
+        <div class="dhead page-heading">
+          <div>
+            <div class="eyebrow"><span class="eyebrow-dot"></span> SELISIH TERBARU DAN AKHIR BULAN LALU</div>
+            <h1 class="ph">Analisa Y2Y</h1>
+            <p class="lead" id="y2-meta">Selisih tiap indikator: nilai tanggal terbaru dikurangi nilai akhir bulan sebelumnya.</p>
+            <p class="sync" id="y2-sync" role="status"></p>
+          </div>
+          <div class="dact">
+            <button class="btn ghost" id="y2-refresh" type="button"><span class="btn-icon" aria-hidden="true">↻</span><span class="btn-label">Muat ulang</span></button>
+            <button class="btn fit" id="y2-export" type="button" disabled><span class="btn-icon" aria-hidden="true">↓</span><span class="btn-label">Unduh Excel</span></button>
+          </div>
+        </div>
+        <div id="y2-notice" class="an-notice" role="status" hidden></div>
+        <section class="an-panel y2-formula" aria-label="Rumus selisih Y2Y">
+          <div class="y2-dates">
+            <div><small>Tanggal terbaru</small><strong id="y2-latest">—</strong></div>
+            <span class="y2-minus" aria-hidden="true">−</span>
+            <div><small>Tanggal pembanding (akhir bulan sebelumnya)</small><strong id="y2-base">—</strong></div>
+            <span class="y2-legend"><i class="y2-chip y2-pos">Plus (&gt; 0)</i><i class="y2-chip y2-neg">Minus (&lt; 0)</i></span>
+          </div>
+          <p class="y2-note">Kolom Member PAR dan Outs. PAR dibalik: plus merah, nol atau minus hijau.</p>
+        </section>
+        <section class="an-panel">
+          <div class="an-panel-head">
+            <div><h2>Y2Y: Analisa per Cabang</h2><p id="y2-t1-caption">Nilai selisih (Y2Y) untuk masing-masing cabang.</p></div>
+            <span class="an-scope" id="y2-scope">Sesuai Wilayah Kerja</span>
+          </div>
+          <div class="tw an-table-wrap y2-wrap"><table id="y2-t1" class="an-table y2-table"></table></div>
+        </section>
+        <section class="an-panel y2-second">
+          <div class="an-panel-head">
+            <div><h2>Y2Y: Analisa per Korcab</h2><p id="y2-t2-caption">Akumulasi nilai selisih (Y2Y) sesuai wilayah kerja masing-masing Korcab.</p></div>
+          </div>
+          <div class="tw an-table-wrap y2-wrap"><table id="y2-t2" class="an-table y2-table"></table></div>
+        </section>
+        <p id="y2-msg" class="note" role="status"></p>
+      </div>
     </div>
 
     <!-- Write-Off: satu menu utama dengan tiga sub menu (dibuka lewat dropdown pada tombol Write-Off) -->
@@ -800,16 +841,16 @@
           <h1 class="ph">Versi &amp; Changelog</h1>
           <p class="lead">Catatan fitur, penyempurnaan, dan perbaikan Dashboard Operasional Satu Pintu dari fondasi awal hingga rilis saat ini.</p>
         </div>
-        <span class="version-current"><i></i> Versi saat ini <b>v.20.28</b></span>
+        <span class="version-current"><i></i> Versi saat ini <b>v.20.29</b></span>
       </div>
 
       <section class="version-overview" aria-label="Ringkasan versi saat ini">
         <div class="version-overview-main">
           <span class="version-overview-label">RILIS TERBARU</span>
-          <strong>Dashboard Operasional Satu Pintu v.20.28</strong>
-          <p>Keamanan menu: menu yang disembunyikan di Manajemen kini ditutup juga di server, sehingga fungsi dan isinya tidak dapat dipakai atau diambil lewat pemanggilan langsung.</p>
+          <strong>Dashboard Operasional Satu Pintu v.20.29</strong>
+          <p>Sub menu baru Dashboard &gt; Analisa Y2Y: selisih tanggal terbaru dikurangi akhir bulan sebelumnya, per cabang dan per Korcab, dengan sel hijau untuk plus dan merah untuk minus.</p>
         </div>
-        <div class="version-overview-stat"><strong>20.28</strong><span>Versi terbaru</span></div>
+        <div class="version-overview-stat"><strong>20.29</strong><span>Versi terbaru</span></div>
         <div class="version-overview-stat"><strong>31 + 2</strong><span>Catatan rilis &amp; fondasi</span></div>
       </section>
 
@@ -820,7 +861,18 @@
 
       <div id="version-list" class="version-list">
         <details class="version-item" open>
-          <summary><span class="version-marker latest">20.28</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.28</b><small>Menu yang disembunyikan di Manajemen ditutup juga di server (fungsi dan isinya)</small></span><span class="version-tag">KEAMANAN · MANAJEMEN</span></summary>
+          <summary><span class="version-marker latest">20.29</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.29</b><small>Sub menu Dashboard &gt; Analisa Y2Y (selisih per cabang dan per Korcab)</small></span><span class="version-tag">DASHBOARD</span></summary>
+          <div class="version-body"><ul>
+            <li>Sub menu baru “Analisa Y2Y” di Dashboard, bersumber dari sheet Analisa. Selisih tiap indikator = nilai tanggal terbaru dikurangi nilai tanggal terakhir akhir bulan sebelumnya (contoh: data 19 Nov 2026 dikurangi data 30 Okt 2026), sehingga angka yang bertambah tampil plus (hijau). Tanggal terbaru dan tanggal pembanding dipilih otomatis dan ditampilkan di atas tabel.</li>
+            <li>Tabel “Y2Y: Analisa per Cabang”: Nama Cabang, Member, Disburse, Outs. Loan, Saving, Repayment, Margin, Member PAR, dan Outs. PAR, lengkap dengan baris total.</li>
+            <li>Tabel “Y2Y: Analisa per Korcab”: Nama User (akun Akses_2 bertingkat USER 2) dengan akumulasi selisih cabang pada Wilayah Kerjanya, dengan kolom yang sama seperti tabel per cabang: Member, Disburse, Outs. Loan, Saving, Repayment, Margin, Member PAR, Outs. PAR.</li>
+            <li>Warna sel: nilai minus (&lt; 0) merah dan nilai plus (&gt; 0) hijau pada Member, Disburse, Outs. Loan, Saving, Repayment, dan Margin di kedua tabel. Kolom Member PAR dan Outs. PAR di kedua tabel warnanya dibalik: plus merah, nol atau minus hijau, karena kenaikan PAR berarti memburuk. Cabang yang tidak punya data pada tanggal pembanding ditandai “—” dan tidak ikut dihitung.</li>
+            <li>Kedua tabel ditampilkan penuh tanpa scroll ke bawah (semua baris langsung terlihat; hanya bergeser ke samping bila layar sempit). Tombol Muat ulang dan Unduh Excel (sheet Per Cabang, Per Korcab, Petunjuk; sel plus dan minus ikut berwarna). Akses data disaring di server menurut Wilayah Kerja, dan sub menu ini bisa ditampilkan atau disembunyikan per tingkat lewat Manajemen.</li>
+            <li>Server: Dashboard.gs, Akses.gs, dan Manajemen.gs diperbarui; wajib redeploy Apps Script dengan Version “New version”.</li>
+          </ul></div>
+        </details>
+        <details class="version-item">
+          <summary><span class="version-marker">20.28</span><span class="version-summary"><b>Dashboard Operasional Satu Pintu v.20.28</b><small>Menu yang disembunyikan di Manajemen ditutup juga di server (fungsi dan isinya)</small></span><span class="version-tag">KEAMANAN · MANAJEMEN</span></summary>
           <div class="version-body"><ul>
             <li>Sebelumnya pengaturan tampil/sembunyi di Manajemen hanya mengatur tombol di layar. Kini server ikut memeriksanya pada setiap permintaan: akun non-Administrator hanya dilayani bila menu pemakai fungsi atau data itu tampil untuk tingkatnya. Memanggil server langsung tanpa lewat tombol (alat pengembang browser, skrip) ditolak dengan pesan “Menu ini tidak tersedia untuk akun Anda”. Administrator tetap selalu boleh.</li>
             <li>Cakupan: Dashboard (Tool PAR, Rekening Bergerak, Progres Harian beserta rinciannya, Analisa Cabang), Write-Off (Eksekusi, Approve, Report beserta Surat dan Jurnal, Verifikasi, Batalkan Verifikasi), Setting (Pengaturan Dashboard, Wilayah Kerja, Enable Download, Write-Off), dan Import Data. Menyembunyikan menu induk menutup seluruh sub menunya, dan aksi Write-Off baru yang belum terdaftar otomatis ikut dijaga lewat menu Write-Off.</li>
